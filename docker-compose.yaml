@@ -1,0 +1,17 @@
+services:
+  backend:
+    container_name: term-viewer-backend
+    image: term-viewer-backend
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - 3001:3001
+  frontend:
+    container_name: termviewer-frontend
+    image: termviewer-frontend
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - 3000:3000
