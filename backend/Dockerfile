@@ -1,18 +1,18 @@
-# Start with Node.js 22 Alpine base image
 FROM node:24-alpine
 
-# Set the working directory in the container
 WORKDIR /usr/src/app
 
-# Copy package.json and install dependencies
-COPY package.json ./
+# Kopiowanie plików definicji pakietów
+COPY package*.json ./
 RUN npm install
 
-# Copy the rest of the application code
+# Kopiowanie reszty kodu aplikacji
 COPY . .
 
-# Expose the port your app runs on
+# Generowanie klienta Prisma dla architektury kontenera
+RUN npx prisma generate
+
 EXPOSE 3001
 
-# Start the app
-CMD ["npm", "run", "dev"]
+# Aplikacja migracji i uruchomienie serwera
+CMD ["sh", "-c", "npx prisma migrate deploy && npm run dev"]

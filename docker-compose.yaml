@@ -3,29 +3,47 @@ services:
     container_name: term-viewer-database
     image: postgres:17
     ports:
-      - 5432:5432
+      - "5432:5432"
     environment:
       - POSTGRES_USER=appuser
       - POSTGRES_PASSWORD=devpassword
       - POSTGRES_DB=myapp
     volumes:
       - pgsql_volume:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U appuser -d myapp"]
+      interval: 3s
+      timeout: 5s
+      retries: 5
+
   backend:
     container_name: term-viewer-backend
-    image: term-viewer-backend
     build:
       context: ./backend
       dockerfile: Dockerfile
     ports:
-      - 3001:3001
+      - "3001:3001"
+    environment:
+      - DATABASE_URL=postgresql://appuser:devpassword@database:5432/myapp?schema=public
+      - PORT=3001
+      - JWT_SECRET=dev-secret-key-change-in-production-1234567890
+    depends_on:
+      database:
+        condition: service_healthy
+
   frontend:
     container_name: termviewer-frontend
-    image: termviewer-frontend
     build:
       context: ./frontend
       dockerfile: Dockerfile
     ports:
-      - 3000:3000
+      - "3000:3000"
+    environment:
+      - REACT_APP_API_URL=http://localhost:3001/api
+    stdin_open: true
+    tty: true
+    depends_on:
+      - backend
 
 volumes:
   pgsql_volume: {}

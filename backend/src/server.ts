@@ -1,4 +1,5 @@
 import express from 'express';
+import cors from 'cors';
 import { prisma } from './lib/prisma.js';
 import { config } from './lib/config.js';
 import { authRouter } from './routes/auth.js';
@@ -7,6 +8,7 @@ import { tasksRouter } from './routes/tasks.js';
 
 const app = express();
 
+app.use(cors());
 app.use(express.json());
 
 // Trasy uwierzytelniania
