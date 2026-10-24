@@ -1,4 +1,15 @@
 services:
+  database:
+    container_name: term-viewer-database
+    image: postgres:17
+    ports:
+      - 5432:5432
+    environment:
+      - POSTGRES_USER=appuser
+      - POSTGRES_PASSWORD=devpassword
+      - POSTGRES_DB=myapp
+    volumes:
+      - pgsql_volume:/var/lib/postgresql
   backend:
     container_name: term-viewer-backend
     image: term-viewer-backend
@@ -15,3 +26,6 @@ services:
       dockerfile: Dockerfile
     ports:
       - 3000:3000
+
+volumes:
+  pgsql_volume: {}
