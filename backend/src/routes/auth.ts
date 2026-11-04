@@ -1,7 +1,13 @@
 import { Router } from 'express';
 import bcrypt from 'bcrypt';
+import rateLimit from 'express-rate-limit';
 import { prisma } from '../lib/prisma.js';
-import { signToken } from '../lib/jwt.js';
+import {
+  signAccessToken,
+  createRefreshToken,
+  verifyAndRotateRefreshToken,
+  revokeRefreshToken,
+} from '../lib/jwt.js';
 import { authenticateToken } from '../middleware/auth.js';
 
 export const authRouter = Router();
@@ -10,8 +16,20 @@ const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const MIN_PASSWORD_LENGTH = 6;
 const BCRYPT_SALT_ROUNDS = 10;
 
+// Rate limiting dla endpointów logowania i rejestracji
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minut
+  limit: 20, // max 20 prób z jednego adresu IP
+  standardHeaders: 'draft-8',
+  legacyHeaders: false,
+  skip: () => process.env.NODE_ENV === 'test',
+  message: {
+    error: 'Too many attempts from this IP, please try again after 15 minutes.',
+  },
+});
+
 // POST /api/auth/register
-authRouter.post('/register', async (req, res) => {
+authRouter.post('/register', authLimiter, async (req, res) => {
   const { email, password, name } = req.body;
 
   if (typeof email !== 'string' || !EMAIL_REGEX.test(email.trim())) {
@@ -59,11 +77,13 @@ authRouter.post('/register', async (req, res) => {
       },
     });
 
-    const token = signToken({ userId: user.id, email: user.email });
+    const token = signAccessToken({ userId: user.id, email: user.email });
+    const refreshToken = await createRefreshToken(user.id);
 
     res.status(201).json({
       user,
       token,
+      refreshToken,
     });
   } catch (error) {
     console.error('Registration error:', error);
@@ -72,7 +92,7 @@ authRouter.post('/register', async (req, res) => {
 });
 
 // POST /api/auth/login
-authRouter.post('/login', async (req, res) => {
+authRouter.post('/login', authLimiter, async (req, res) => {
   const { email, password } = req.body;
 
   if (typeof email !== 'string' || typeof password !== 'string') {
@@ -98,7 +118,8 @@ authRouter.post('/login', async (req, res) => {
       return;
     }
 
-    const token = signToken({ userId: user.id, email: user.email });
+    const token = signAccessToken({ userId: user.id, email: user.email });
+    const refreshToken = await createRefreshToken(user.id);
 
     res.json({
       user: {
@@ -108,10 +129,54 @@ authRouter.post('/login', async (req, res) => {
         createdAt: user.createdAt,
       },
       token,
+      refreshToken,
     });
   } catch (error) {
     console.error('Login error:', error);
     res.status(500).json({ error: 'Failed to authenticate user' });
+  }
+});
+
+// POST /api/auth/refresh - odświeżenie tokenu sesji z rotacją
+authRouter.post('/refresh', async (req, res) => {
+  const { refreshToken } = req.body;
+
+  if (typeof refreshToken !== 'string' || !refreshToken.trim()) {
+    res.status(400).json({ error: 'Refresh token is required' });
+    return;
+  }
+
+  try {
+    const { userId, newRefreshToken } = await verifyAndRotateRefreshToken(
+      refreshToken.trim()
+    );
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        createdAt: true,
+      },
+    });
+
+    if (!user) {
+      res.status(401).json({ error: 'User not found' });
+      return;
+    }
+
+    const token = signAccessToken({ userId: user.id, email: user.email });
+
+    res.json({
+      token,
+      refreshToken: newRefreshToken,
+      user,
+    });
+  } catch (error: any) {
+    res.status(401).json({
+      error: error.message || 'Invalid or expired refresh token',
+    });
   }
 });
 
@@ -120,7 +185,15 @@ authRouter.get('/me', authenticateToken, (req, res) => {
   res.json({ user: req.user });
 });
 
-// POST /api/auth/logout
-authRouter.post('/logout', (_req, res) => {
+// POST /api/auth/logout - unieważnienie refresh tokenu
+authRouter.post('/logout', async (req, res) => {
+  const { refreshToken } = req.body;
+  if (typeof refreshToken === 'string' && refreshToken.trim()) {
+    try {
+      await revokeRefreshToken(refreshToken.trim());
+    } catch (err) {
+      console.error('Error revoking token on logout:', err);
+    }
+  }
   res.json({ message: 'Logged out successfully' });
 });

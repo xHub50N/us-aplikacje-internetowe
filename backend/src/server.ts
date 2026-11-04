@@ -1,5 +1,7 @@
 import express from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
 import { prisma } from './lib/prisma.js';
 import { config } from './lib/config.js';
 import { authRouter } from './routes/auth.js';
@@ -8,8 +10,23 @@ import { tasksRouter } from './routes/tasks.js';
 
 const app = express();
 
+// Nagłówki bezpieczeństwa HTTP
+app.use(helmet());
+
+// CORS i obsługa JSON
 app.use(cors());
 app.use(express.json());
+
+// Ogólny rate limiter dla zapytań do API
+const generalApiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 500,
+  standardHeaders: 'draft-8',
+  legacyHeaders: false,
+  skip: () => process.env.NODE_ENV === 'test',
+});
+
+app.use('/api', generalApiLimiter);
 
 // Trasy uwierzytelniania
 app.use('/api/auth', authRouter);

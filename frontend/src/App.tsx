@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import './App.css';
-import { api, setToken, User, Project, Task } from './api';
+import { api, setTokens, User, Project, Task } from './api';
 
 export function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -67,7 +67,7 @@ export function App() {
         const { user } = await api.auth.me();
         setUser(user);
       } catch {
-        setToken(null);
+        setTokens({ token: null, refreshToken: null });
         setUser(null);
       } finally {
         setLoadingUser(false);
@@ -90,11 +90,11 @@ export function App() {
     try {
       if (authMode === 'login') {
         const res = await api.auth.login({ email, password });
-        setToken(res.token);
+        setTokens({ token: res.token, refreshToken: res.refreshToken });
         setUser(res.user);
       } else {
         const res = await api.auth.register({ name, email, password });
-        setToken(res.token);
+        setTokens({ token: res.token, refreshToken: res.refreshToken });
         setUser(res.user);
       }
       setEmail('');
@@ -105,8 +105,13 @@ export function App() {
     }
   };
 
-  const handleLogout = () => {
-    setToken(null);
+  const handleLogout = async () => {
+    try {
+      await api.auth.logout();
+    } catch {
+      // Ignoruj błąd sieci przy wylogowywaniu
+    }
+    setTokens({ token: null, refreshToken: null });
     setUser(null);
     setProjects([]);
     setTasks([]);

@@ -5,13 +5,33 @@ function getToken(): string | null {
   return localStorage.getItem('token');
 }
 
-export function setToken(token: string | null) {
-  if (token) {
-    localStorage.setItem('token', token);
-  } else {
+function getRefreshToken(): string | null {
+  return localStorage.getItem('refreshToken');
+}
+
+export function setTokens(tokens: {
+  token?: string | null;
+  refreshToken?: string | null;
+}) {
+  if (tokens.token) {
+    localStorage.setItem('token', tokens.token);
+  } else if (tokens.token === null) {
     localStorage.removeItem('token');
   }
+
+  if (tokens.refreshToken) {
+    localStorage.setItem('refreshToken', tokens.refreshToken);
+  } else if (tokens.refreshToken === null) {
+    localStorage.removeItem('refreshToken');
+  }
 }
+
+// Dla kompatybilności wstecznej
+export function setToken(token: string | null) {
+  setTokens({ token });
+}
+
+let isRefreshing = false;
 
 async function request<T>(
   endpoint: string,
@@ -27,10 +47,46 @@ async function request<T>(
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+  let response = await fetch(`${API_BASE_URL}${endpoint}`, {
     ...options,
     headers,
   });
+
+  // Jeśli token wygasł (401), spróbuj cichego odświeżenia przez refreshToken
+  if (response.status === 401 && !endpoint.startsWith('/auth/') && !isRefreshing) {
+    const refreshToken = getRefreshToken();
+    if (refreshToken) {
+      isRefreshing = true;
+      try {
+        const refreshResponse = await fetch(`${API_BASE_URL}/auth/refresh`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refreshToken }),
+        });
+
+        if (refreshResponse.ok) {
+          const refreshData = await refreshResponse.json();
+          setTokens({
+            token: refreshData.token,
+            refreshToken: refreshData.refreshToken,
+          });
+
+          // Ponów pierwotne zapytanie z nowym tokenem
+          headers['Authorization'] = `Bearer ${refreshData.token}`;
+          response = await fetch(`${API_BASE_URL}${endpoint}`, {
+            ...options,
+            headers,
+          });
+        } else {
+          setTokens({ token: null, refreshToken: null });
+        }
+      } catch {
+        setTokens({ token: null, refreshToken: null });
+      } finally {
+        isRefreshing = false;
+      }
+    }
+  }
 
   const data = await response.json().catch(() => ({}));
 
@@ -75,16 +131,29 @@ export interface Task {
 export const api = {
   auth: {
     register: (body: { name: string; email: string; password: string }) =>
-      request<{ user: User; token: string }>('/auth/register', {
-        method: 'POST',
-        body: JSON.stringify(body),
-      }),
+      request<{ user: User; token: string; refreshToken: string }>(
+        '/auth/register',
+        {
+          method: 'POST',
+          body: JSON.stringify(body),
+        }
+      ),
     login: (body: { email: string; password: string }) =>
-      request<{ user: User; token: string }>('/auth/login', {
-        method: 'POST',
-        body: JSON.stringify(body),
-      }),
+      request<{ user: User; token: string; refreshToken: string }>(
+        '/auth/login',
+        {
+          method: 'POST',
+          body: JSON.stringify(body),
+        }
+      ),
     me: () => request<{ user: User }>('/auth/me'),
+    logout: () => {
+      const refreshToken = getRefreshToken();
+      return request<{ message: string }>('/auth/logout', {
+        method: 'POST',
+        body: JSON.stringify({ refreshToken }),
+      });
+    },
   },
   projects: {
     getAll: () => request<Project[]>('/projects'),
