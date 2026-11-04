@@ -7,6 +7,8 @@ import { config } from './lib/config.js';
 import { authRouter } from './routes/auth.js';
 import { projectsRouter } from './routes/projects.js';
 import { tasksRouter } from './routes/tasks.js';
+import { errorHandler } from './middleware/errorHandler.js';
+import { AppError } from './lib/errors.js';
 
 const app = express();
 
@@ -38,7 +40,7 @@ app.use('/api/projects', projectsRouter);
 app.use('/api/tasks', tasksRouter);
 
 // Sprawdzenie połączenia z PostgreSQL
-app.get('/api/health', async (_req, res) => {
+app.get('/api/health', async (_req, res, next) => {
   try {
     await prisma.$queryRaw`SELECT 1`;
 
@@ -47,13 +49,17 @@ app.get('/api/health', async (_req, res) => {
       database: 'connected',
     });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({
-      status: 'error',
-      database: 'disconnected',
-    });
+    next(error);
   }
 });
+
+// Obsługa nieznalezionych tras API (404)
+app.use('/api', (_req, _res, next) => {
+  next(AppError.notFound('API route not found'));
+});
+
+// Centralny error handler
+app.use(errorHandler);
 
 
 

@@ -103,29 +103,77 @@ export interface User {
   name: string;
 }
 
+export type ProjectRole = 'OWNER' | 'MEMBER';
+
+export interface ProjectMember {
+  id: number;
+  role: ProjectRole;
+  createdAt: string;
+  projectId: number;
+  userId: number;
+  user: {
+    id: number;
+    email: string;
+    name: string;
+  };
+}
+
 export interface Project {
   id: number;
   name: string;
   description: string | null;
   createdAt: string;
   userId: number;
+  user?: {
+    id: number;
+    email: string;
+    name: string;
+  };
+  members?: ProjectMember[];
   _count?: {
     tasks: number;
+    members?: number;
   };
 }
+
+export type Priority = 'LOW' | 'MEDIUM' | 'HIGH';
 
 export interface Task {
   id: number;
   title: string;
   description: string | null;
   completed: boolean;
+  priority: Priority;
+  dueDate: string | null;
   createdAt: string;
   projectId: number;
   userId: number;
+  assignedToId?: number | null;
+  user?: {
+    id: number;
+    email: string;
+    name: string;
+  };
+  assignedTo?: {
+    id: number;
+    email: string;
+    name: string;
+  } | null;
   project?: {
     id: number;
     name: string;
   };
+}
+
+export interface TaskQueryParams {
+  projectId?: number;
+  completed?: boolean;
+  priority?: Priority;
+  assignedToId?: number;
+  assignedToMe?: boolean;
+  search?: string;
+  sortBy?: 'createdAt' | 'dueDate' | 'title' | 'priority';
+  sortOrder?: 'asc' | 'desc';
 }
 
 export const api = {
@@ -157,6 +205,7 @@ export const api = {
   },
   projects: {
     getAll: () => request<Project[]>('/projects'),
+    getById: (id: number) => request<Project>(`/projects/${id}`),
     create: (body: { name: string; description?: string }) =>
       request<Project>('/projects', {
         method: 'POST',
@@ -166,9 +215,20 @@ export const api = {
       request<{ message: string }>(`/projects/${id}`, {
         method: 'DELETE',
       }),
+    getMembers: (id: number) =>
+      request<ProjectMember[]>(`/projects/${id}/members`),
+    addMember: (id: number, body: { email: string; role?: ProjectRole }) =>
+      request<ProjectMember>(`/projects/${id}/members`, {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }),
+    removeMember: (projectId: number, userId: number) =>
+      request<{ message: string }>(`/projects/${projectId}/members/${userId}`, {
+        method: 'DELETE',
+      }),
   },
   tasks: {
-    getAll: (params?: { projectId?: number; completed?: boolean }) => {
+    getAll: (params?: TaskQueryParams) => {
       const query = new URLSearchParams();
       if (params?.projectId) {
         query.append('projectId', params.projectId.toString());
@@ -176,13 +236,34 @@ export const api = {
       if (params?.completed !== undefined) {
         query.append('completed', params.completed.toString());
       }
+      if (params?.priority) {
+        query.append('priority', params.priority);
+      }
+      if (params?.assignedToId) {
+        query.append('assignedToId', params.assignedToId.toString());
+      }
+      if (params?.assignedToMe !== undefined) {
+        query.append('assignedToMe', params.assignedToMe.toString());
+      }
+      if (params?.search) {
+        query.append('search', params.search);
+      }
+      if (params?.sortBy) {
+        query.append('sortBy', params.sortBy);
+      }
+      if (params?.sortOrder) {
+        query.append('sortOrder', params.sortOrder);
+      }
       const qs = query.toString();
       return request<Task[]>(`/tasks${qs ? `?${qs}` : ''}`);
     },
     create: (body: {
       title: string;
       description?: string;
+      priority?: Priority;
+      dueDate?: string | null;
       projectId: number;
+      assignedToId?: number | null;
     }) =>
       request<Task>('/tasks', {
         method: 'POST',
@@ -194,7 +275,10 @@ export const api = {
         title?: string;
         description?: string | null;
         completed?: boolean;
+        priority?: Priority;
+        dueDate?: string | null;
         projectId?: number;
+        assignedToId?: number | null;
       }
     ) =>
       request<Task>(`/tasks/${id}`, {

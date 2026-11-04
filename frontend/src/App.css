@@ -10,7 +10,7 @@ body {
 }
 
 .app-container {
-  max-width: 1100px;
+  max-width: 1150px;
   margin: 0 auto;
   padding: 20px;
 }
@@ -146,6 +146,25 @@ body {
   background-color: #bd2130;
 }
 
+.btn-sm {
+  padding: 4px 8px;
+  font-size: 0.8rem;
+}
+
+.btn-icon {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1.1rem;
+  padding: 4px 6px;
+  border-radius: 4px;
+  transition: background 0.15s;
+}
+
+.btn-icon:hover {
+  background-color: #dadce0;
+}
+
 .btn-block {
   width: 100%;
 }
@@ -162,11 +181,11 @@ body {
 /* Dashboard Layout */
 .dashboard-grid {
   display: grid;
-  grid-template-columns: 320px 1fr;
+  grid-template-columns: 340px 1fr;
   gap: 24px;
 }
 
-@media (max-width: 768px) {
+@media (max-width: 880px) {
   .dashboard-grid {
     grid-template-columns: 1fr;
   }
@@ -186,6 +205,26 @@ body {
   border-bottom: 1px solid #eee;
   padding-bottom: 10px;
   color: #222;
+}
+
+.panel-header-with-action {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid #eee;
+  padding-bottom: 10px;
+  margin-bottom: 16px;
+}
+
+.panel-header-with-action h2 {
+  border-bottom: none;
+  padding-bottom: 0;
+  margin-bottom: 0;
+}
+
+.members-btn {
+  padding: 6px 12px;
+  font-size: 0.85rem;
 }
 
 .panel h3 {
@@ -215,39 +254,126 @@ body {
 .project-item.active {
   background-color: #e8f0fe;
   border-color: #1a73e8;
-  font-weight: 600;
 }
 
 .project-info {
   flex: 1;
   overflow: hidden;
-  text-overflow: ellipsis;
 }
 
-.project-badge {
-  background-color: #d2e3fc;
-  color: #174ea6;
-  font-size: 0.75rem;
-  padding: 2px 7px;
-  border-radius: 12px;
-  margin-left: 8px;
-  font-weight: normal;
-}
-
-/* Tasks list */
-.tasks-filters {
+.project-title-row {
   display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.project-name {
+  font-weight: 500;
+  color: #202124;
+}
+
+.project-subtext {
+  font-size: 0.78rem;
+  color: #666;
+  margin-top: 2px;
+}
+
+.project-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.role-badge {
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 10px;
+  text-transform: uppercase;
+}
+
+.role-badge.owner {
+  background: #e8f0fe;
+  color: #1a73e8;
+}
+
+.role-badge.member {
+  background: #f1f3f4;
+  color: #5f6368;
+}
+
+/* Controls row (search & sort) */
+.controls-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 14px;
+  align-items: center;
+}
+
+.search-input {
+  flex: 1;
+  min-width: 200px;
+  padding: 8px 12px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  font-size: 0.95rem;
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: #1a73e8;
+}
+
+.sort-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sort-group label {
+  font-size: 0.88rem;
+  color: #555;
+  font-weight: 500;
+}
+
+.sort-group select {
+  padding: 7px 10px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  font-size: 0.88rem;
+}
+
+.sort-btn {
+  padding: 7px 10px;
+  font-size: 0.85rem;
+}
+
+/* Filters */
+.filters-container {
+  display: flex;
+  flex-direction: column;
   gap: 8px;
   margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #eee;
+}
+
+.tasks-filters,
+.priority-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .filter-btn {
-  padding: 6px 12px;
+  padding: 5px 12px;
   background: #f1f3f4;
-  border: none;
+  border: 1px solid transparent;
   border-radius: 16px;
-  font-size: 0.85rem;
+  font-size: 0.82rem;
   cursor: pointer;
+  transition: all 0.15s;
 }
 
 .filter-btn.active {
@@ -255,6 +381,48 @@ body {
   color: white;
 }
 
+.priority-btn.high.active {
+  background: #c5221f;
+  color: white;
+}
+
+.priority-btn.medium.active {
+  background: #e37400;
+  color: white;
+}
+
+.priority-btn.low.active {
+  background: #137333;
+  color: white;
+}
+
+/* Task Form Layout */
+.form-row-3 {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 12px;
+}
+
+.form-row-4 {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr 1fr;
+  gap: 12px;
+}
+
+@media (max-width: 768px) {
+  .form-row-4 {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 500px) {
+  .form-row-4,
+  .form-row-3 {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Tasks list */
 .task-item {
   display: flex;
   align-items: flex-start;
@@ -282,15 +450,44 @@ body {
   flex: 1;
 }
 
+.task-header-line {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
 .task-title {
   font-size: 1rem;
   font-weight: 500;
-  margin-bottom: 4px;
 }
 
 .task-title.completed {
   text-decoration: line-through;
   color: #888;
+}
+
+.priority-tag {
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 4px;
+  text-transform: uppercase;
+}
+
+.priority-tag.high {
+  background: #fce8e6;
+  color: #c5221f;
+}
+
+.priority-tag.medium {
+  background: #fef7e0;
+  color: #b06000;
+}
+
+.priority-tag.low {
+  background: #e6f4ea;
+  color: #137333;
 }
 
 .task-description {
@@ -299,8 +496,19 @@ body {
   margin-bottom: 6px;
 }
 
-.task-project-tag {
-  display: inline-block;
+.task-footer-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.task-project-tag,
+.task-author-tag,
+.task-assignee-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   font-size: 0.75rem;
   background: #e3e8ef;
   padding: 2px 8px;
@@ -308,9 +516,141 @@ body {
   color: #475569;
 }
 
+.task-author-tag {
+  background: #edf2f7;
+  color: #2d3748;
+}
+
+.task-assignee-badge {
+  background: #e8f0fe;
+  color: #1a73e8;
+  font-weight: 500;
+}
+
+.assignee-select {
+  background: transparent;
+  border: 1px solid #1a73e8;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  color: #1a73e8;
+  padding: 1px 4px;
+  cursor: pointer;
+}
+
+.assignee-filter-btn.active {
+  background: #174ea6;
+  color: white;
+}
+
+.due-date-tag {
+  display: inline-block;
+  font-size: 0.75rem;
+  background: #f1f3f4;
+  padding: 2px 8px;
+  border-radius: 4px;
+  color: #555;
+}
+
+.due-date-tag.overdue {
+  background: #fce8e6;
+  color: #c5221f;
+  font-weight: 600;
+}
+
 .empty-state {
   text-align: center;
   color: #888;
   padding: 24px 0;
   font-style: italic;
+}
+
+/* Modal styles */
+.modal-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 999;
+}
+
+.modal-box {
+  background: white;
+  width: 90%;
+  max-width: 520px;
+  border-radius: 8px;
+  padding: 24px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.modal-header h3 {
+  margin: 0;
+  font-size: 1.15rem;
+  color: #1a73e8;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  font-size: 1.2rem;
+  cursor: pointer;
+  color: #666;
+}
+
+.add-member-form {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.add-member-form input {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  font-size: 0.9rem;
+}
+
+.members-list h4 {
+  margin: 0 0 12px 0;
+  font-size: 0.95rem;
+  color: #444;
+}
+
+.member-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px;
+  background: #f8f9fa;
+  border: 1px solid #eee;
+  border-radius: 6px;
+  margin-bottom: 8px;
+}
+
+.member-name {
+  font-weight: 500;
+  font-size: 0.92rem;
+}
+
+.member-email {
+  font-size: 0.8rem;
+  color: #666;
+}
+
+.member-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
