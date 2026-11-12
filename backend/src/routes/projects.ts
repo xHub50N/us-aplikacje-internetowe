@@ -3,6 +3,7 @@ import { prisma } from '../lib/prisma.js';
 import { authenticateToken } from '../middleware/auth.js';
 import { validate } from '../middleware/validate.js';
 import { AppError } from '../lib/errors.js';
+import { sendProjectInvitationEmail } from '../lib/email.js';
 import {
   numericIdParamSchema,
   createProjectSchema,
@@ -23,7 +24,11 @@ async function getProjectMembership(projectId: number, userId: number) {
       projectId_userId: { projectId, userId },
     },
     include: {
-      project: true,
+      project: {
+        include: {
+          user: true,
+        },
+      },
     },
   });
 }
@@ -305,6 +310,14 @@ projectsRouter.post(
             select: { id: true, name: true, email: true },
           },
         },
+      });
+
+      // Powiadomienie e-mail (asynchroniczne, bez blokowania odpowiedzi)
+      void sendProjectInvitationEmail({
+        to: targetUser.email,
+        recipientName: targetUser.name,
+        projectName: membership.project.name,
+        inviterName: membership.project.user?.name || 'Właściciel projektu',
       });
 
       res.status(201).json(newMember);

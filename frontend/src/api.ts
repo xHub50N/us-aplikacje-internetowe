@@ -174,6 +174,16 @@ export interface TaskQueryParams {
   search?: string;
   sortBy?: 'createdAt' | 'dueDate' | 'title' | 'priority';
   sortOrder?: 'asc' | 'desc';
+  page?: number;
+  limit?: number;
+}
+
+export interface PaginatedResponse<T> {
+  items: T[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
 }
 
 export const api = {
@@ -211,6 +221,11 @@ export const api = {
         method: 'POST',
         body: JSON.stringify(body),
       }),
+    update: (id: number, body: { name?: string; description?: string | null }) =>
+      request<Project>(`/projects/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(body),
+      }),
     delete: (id: number) =>
       request<{ message: string }>(`/projects/${id}`, {
         method: 'DELETE',
@@ -228,7 +243,7 @@ export const api = {
       }),
   },
   tasks: {
-    getAll: (params?: TaskQueryParams) => {
+    getAll: async (params?: TaskQueryParams) => {
       const query = new URLSearchParams();
       if (params?.projectId) {
         query.append('projectId', params.projectId.toString());
@@ -254,8 +269,24 @@ export const api = {
       if (params?.sortOrder) {
         query.append('sortOrder', params.sortOrder);
       }
+      if (params?.page !== undefined) {
+        query.append('page', params.page.toString());
+      }
+      if (params?.limit !== undefined) {
+        query.append('limit', params.limit.toString());
+      }
       const qs = query.toString();
-      return request<Task[]>(`/tasks${qs ? `?${qs}` : ''}`);
+      const res = await request<PaginatedResponse<Task> | Task[]>(`/tasks${qs ? `?${qs}` : ''}`);
+      if (Array.isArray(res)) {
+        return {
+          items: res,
+          total: res.length,
+          page: 1,
+          limit: res.length,
+          totalPages: 1,
+        };
+      }
+      return res;
     },
     create: (body: {
       title: string;

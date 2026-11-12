@@ -1,8 +1,10 @@
 import { Router } from 'express';
+import { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
 import { authenticateToken } from '../middleware/auth.js';
 import { validate } from '../middleware/validate.js';
 import { AppError } from '../lib/errors.js';
+import { sendTaskAssignedEmail } from '../lib/email.js';
 import {
   numericIdParamSchema,
   createTaskSchema,
@@ -50,6 +52,8 @@ tasksRouter.get(
       search,
       sortBy = 'createdAt',
       sortOrder = 'desc',
+      page,
+      limit,
     } = req.query as unknown as {
       projectId?: number;
       completed?: boolean;
@@ -59,6 +63,8 @@ tasksRouter.get(
       search?: string;
       sortBy?: 'createdAt' | 'dueDate' | 'title' | 'priority';
       sortOrder?: 'asc' | 'desc';
+      page?: number;
+      limit?: number;
     };
 
     try {
@@ -82,27 +88,74 @@ tasksRouter.get(
         finalAssignedToFilter = Number(assignedToId);
       }
 
-      const tasks = await prisma.task.findMany({
-        where: {
-          project: {
-            OR: [
-              { userId },
-              { members: { some: { userId } } },
-            ],
-          },
-          ...(parsedProjectId !== undefined ? { projectId: parsedProjectId } : {}),
-          ...(completed !== undefined ? { completed } : {}),
-          ...(priority !== undefined ? { priority } : {}),
-          ...(finalAssignedToFilter !== undefined ? { assignedToId: finalAssignedToFilter } : {}),
-          ...(search
-            ? {
-                OR: [
-                  { title: { contains: search, mode: 'insensitive' } },
-                  { description: { contains: search, mode: 'insensitive' } },
-                ],
-              }
-            : {}),
+      const where: Prisma.TaskWhereInput = {
+        project: {
+          OR: [
+            { userId },
+            { members: { some: { userId } } },
+          ],
         },
+        ...(parsedProjectId !== undefined ? { projectId: parsedProjectId } : {}),
+        ...(completed !== undefined ? { completed } : {}),
+        ...(priority !== undefined ? { priority } : {}),
+        ...(finalAssignedToFilter !== undefined ? { assignedToId: finalAssignedToFilter } : {}),
+        ...(search
+          ? {
+              OR: [
+                { title: { contains: search, mode: 'insensitive' } },
+                { description: { contains: search, mode: 'insensitive' } },
+              ],
+            }
+          : {}),
+      };
+
+      const isPaginated = page !== undefined || limit !== undefined;
+
+      if (isPaginated) {
+        const currentPage = page !== undefined ? Math.max(1, Number(page)) : 1;
+        const currentLimit = limit !== undefined ? Math.min(100, Math.max(1, Number(limit))) : 10;
+        const skip = (currentPage - 1) * currentLimit;
+
+        const [total, tasks] = await Promise.all([
+          prisma.task.count({ where }),
+          prisma.task.findMany({
+            where,
+            orderBy: { [sortBy]: sortOrder },
+            skip,
+            take: currentLimit,
+            include: {
+              user: {
+                select: { id: true, name: true, email: true },
+              },
+              assignedTo: {
+                select: { id: true, name: true, email: true },
+              },
+              project: {
+                select: {
+                  id: true,
+                  name: true,
+                },
+              },
+            },
+          }),
+        ]);
+
+        const totalPages = Math.ceil(total / currentLimit) || 1;
+
+        res.setHeader('X-Total-Count', total.toString());
+        res.setHeader('X-Total-Pages', totalPages.toString());
+
+        return res.json({
+          items: tasks,
+          total,
+          page: currentPage,
+          limit: currentLimit,
+          totalPages,
+        });
+      }
+
+      const tasks = await prisma.task.findMany({
+        where,
         orderBy: { [sortBy]: sortOrder },
         include: {
           user: {
@@ -120,6 +173,7 @@ tasksRouter.get(
         },
       });
 
+      res.setHeader('X-Total-Count', tasks.length.toString());
       res.json(tasks);
     } catch (error) {
       next(error);
@@ -184,6 +238,19 @@ tasksRouter.post(
           },
         },
       });
+
+      // Powiadomienie e-mail jeśli zadanie przypisano do kogoś innego
+      if (task.assignedTo && task.assignedTo.id !== userId) {
+        void sendTaskAssignedEmail({
+          to: task.assignedTo.email,
+          recipientName: task.assignedTo.name,
+          taskTitle: task.title,
+          projectName: task.project.name,
+          assignerName: task.user.name,
+          priority: task.priority,
+          dueDate: task.dueDate ? task.dueDate.toISOString() : null,
+        });
+      }
 
       res.status(201).json(task);
     } catch (error) {
@@ -313,6 +380,23 @@ const updateTaskHandler = async (req: any, res: any, next: any) => {
         },
       },
     });
+
+    // Jeśli zadanie zostało przypisane do kogoś nowego
+    if (
+      updatedTask.assignedTo &&
+      updatedTask.assignedTo.id !== existingTask.assignedToId &&
+      updatedTask.assignedTo.id !== userId
+    ) {
+      void sendTaskAssignedEmail({
+        to: updatedTask.assignedTo.email,
+        recipientName: updatedTask.assignedTo.name,
+        taskTitle: updatedTask.title,
+        projectName: updatedTask.project.name,
+        assignerName: updatedTask.user.name,
+        priority: updatedTask.priority,
+        dueDate: updatedTask.dueDate ? updatedTask.dueDate.toISOString() : null,
+      });
+    }
 
     res.json(updatedTask);
   } catch (error) {

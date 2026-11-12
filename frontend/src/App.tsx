@@ -2,6 +2,21 @@ import React, { useState, useEffect, useCallback } from 'react';
 import './App.css';
 import { api, setTokens, User, Project, Task, Priority, ProjectMember } from './api';
 
+interface Toast {
+  id: string;
+  message: string;
+  type: 'success' | 'error' | 'info';
+}
+
+interface ConfirmDialogConfig {
+  title: string;
+  message: string;
+  confirmLabel?: string;
+  cancelLabel?: string;
+  isDanger?: boolean;
+  onConfirm: () => void | Promise<void>;
+}
+
 export function App() {
   const [user, setUser] = useState<User | null>(null);
   const [loadingUser, setLoadingUser] = useState(true);
@@ -19,6 +34,11 @@ export function App() {
   const [newProjectName, setNewProjectName] = useState('');
   const [newProjectDesc, setNewProjectDesc] = useState('');
 
+  // Project edit modal state
+  const [editingProject, setEditingProject] = useState<Project | null>(null);
+  const [editProjectName, setEditProjectName] = useState('');
+  const [editProjectDesc, setEditProjectDesc] = useState('');
+
   // Project members modal state
   const [isMembersModalOpen, setIsMembersModalOpen] = useState(false);
   const [projectMembers, setProjectMembers] = useState<ProjectMember[]>([]);
@@ -34,6 +54,12 @@ export function App() {
   const [sortBy, setSortBy] = useState<'createdAt' | 'dueDate' | 'priority' | 'title'>('createdAt');
   const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
 
+  // Pagination state
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(10);
+  const [totalTasks, setTotalTasks] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+
   // New task form state
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [newTaskDesc, setNewTaskDesc] = useState('');
@@ -42,7 +68,32 @@ export function App() {
   const [newTaskProjectId, setNewTaskProjectId] = useState<number | ''>('');
   const [newTaskAssignedToId, setNewTaskAssignedToId] = useState<number | ''>('');
 
+  // Edit task modal state
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [editTaskTitle, setEditTaskTitle] = useState('');
+  const [editTaskDesc, setEditTaskDesc] = useState('');
+  const [editTaskPriority, setEditTaskPriority] = useState<Priority>('MEDIUM');
+  const [editTaskDueDate, setEditTaskDueDate] = useState('');
+  const [editTaskProjectId, setEditTaskProjectId] = useState<number | ''>('');
+  const [editTaskAssignedToId, setEditTaskAssignedToId] = useState<number | ''>('');
+  const [editTaskCompleted, setEditTaskCompleted] = useState(false);
+
+  // Notifications & confirmation
+  const [toasts, setToasts] = useState<Toast[]>([]);
+  const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogConfig | null>(null);
   const [globalError, setGlobalError] = useState<string | null>(null);
+
+  const showToast = useCallback((message: string, type: 'success' | 'error' | 'info' = 'info') => {
+    const id = Math.random().toString(36).substring(2, 9);
+    setToasts((prev) => [...prev, { id, message, type }]);
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, 3500);
+  }, []);
+
+  const removeToast = useCallback((id: string) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  }, []);
 
   // Load projects
   const loadProjects = useCallback(async () => {
@@ -63,6 +114,8 @@ export function App() {
       const params: any = {
         sortBy,
         sortOrder,
+        page,
+        limit,
       };
       if (selectedProjectId !== null) {
         params.projectId = selectedProjectId;
@@ -82,12 +135,14 @@ export function App() {
         params.search = searchQuery.trim();
       }
 
-      const data = await api.tasks.getAll(params);
-      setTasks(data);
+      const res = await api.tasks.getAll(params);
+      setTasks(res.items);
+      setTotalTasks(res.total);
+      setTotalPages(res.totalPages);
     } catch (err: any) {
       setGlobalError(err.message || 'Błąd ładowania zadań');
     }
-  }, [selectedProjectId, taskFilter, priorityFilter, assignedToMeOnly, searchQuery, sortBy, sortOrder]);
+  }, [selectedProjectId, taskFilter, priorityFilter, assignedToMeOnly, searchQuery, sortBy, sortOrder, page, limit]);
 
   // Load members of selected project
   const loadProjectMembers = useCallback(async (projectId: number) => {
@@ -136,10 +191,12 @@ export function App() {
         const res = await api.auth.login({ email, password });
         setTokens({ token: res.token, refreshToken: res.refreshToken });
         setUser(res.user);
+        showToast(`Witaj ponownie, ${res.user.name}!`, 'success');
       } else {
         const res = await api.auth.register({ name, email, password });
         setTokens({ token: res.token, refreshToken: res.refreshToken });
         setUser(res.user);
+        showToast(`Witaj w aplikacji, ${res.user.name}!`, 'success');
       }
       setEmail('');
       setPassword('');
@@ -160,40 +217,73 @@ export function App() {
     setProjects([]);
     setTasks([]);
     setSelectedProjectId(null);
+    showToast('Wylogowano pomyślnie', 'info');
   };
 
+  // Tworzenie projektu
   const handleCreateProject = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newProjectName.trim()) return;
     try {
       setGlobalError(null);
-      await api.projects.create({
+      const created = await api.projects.create({
         name: newProjectName.trim(),
         description: newProjectDesc.trim() || undefined,
       });
       setNewProjectName('');
       setNewProjectDesc('');
+      showToast(`Projekt "${created.name}" został utworzony`, 'success');
       await loadProjects();
     } catch (err: any) {
-      setGlobalError(err.message || 'Błąd tworzenia projektu');
+      showToast(err.message || 'Błąd tworzenia projektu', 'error');
     }
   };
 
-  const handleDeleteProject = async (id: number) => {
-    if (!window.confirm('Czy na pewno chcesz usunąć ten projekt wraz z wszystkimi jego zadaniami?')) {
-      return;
-    }
+  // Edycja projektu
+  const handleOpenEditProject = (proj: Project) => {
+    setEditingProject(proj);
+    setEditProjectName(proj.name);
+    setEditProjectDesc(proj.description || '');
+  };
+
+  const handleSaveEditProject = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingProject || !editProjectName.trim()) return;
     try {
-      setGlobalError(null);
-      await api.projects.delete(id);
-      if (selectedProjectId === id) {
-        setSelectedProjectId(null);
-      }
+      await api.projects.update(editingProject.id, {
+        name: editProjectName.trim(),
+        description: editProjectDesc.trim() || null,
+      });
+      setEditingProject(null);
+      showToast('Projekt został zaktualizowany', 'success');
       await loadProjects();
       await loadTasks();
     } catch (err: any) {
-      setGlobalError(err.message || 'Błąd usuwania projektu');
+      showToast(err.message || 'Błąd aktualizacji projektu', 'error');
     }
+  };
+
+  // Usuwanie projektu z potwierdzeniem
+  const handleDeleteProject = (proj: Project) => {
+    setConfirmDialog({
+      title: 'Usuń projekt',
+      message: `Czy na pewno chcesz usunąć projekt "${proj.name}" wraz ze wszystkimi jego zadaniami? Tej operacji nie można cofnąć.`,
+      confirmLabel: 'Usuń projekt',
+      isDanger: true,
+      onConfirm: async () => {
+        try {
+          await api.projects.delete(proj.id);
+          if (selectedProjectId === proj.id) {
+            setSelectedProjectId(null);
+          }
+          showToast(`Projekt "${proj.name}" został usunięty`, 'info');
+          await loadProjects();
+          await loadTasks();
+        } catch (err: any) {
+          showToast(err.message || 'Błąd usuwania projektu', 'error');
+        }
+      },
+    });
   };
 
   const handleOpenMembersModal = async (projectId: number) => {
@@ -214,6 +304,7 @@ export function App() {
         role: 'MEMBER',
       });
       setNewMemberEmail('');
+      showToast('Dodano nowego członka do zespołu', 'success');
       await loadProjectMembers(selectedProjectId);
       await loadProjects();
     } catch (err: any) {
@@ -221,24 +312,39 @@ export function App() {
     }
   };
 
-  const handleRemoveMember = async (projectId: number, memberUserId: number) => {
-    try {
-      setMembersModalError(null);
-      await api.projects.removeMember(projectId, memberUserId);
-      await loadProjectMembers(projectId);
-      await loadProjects();
-      await loadTasks();
-    } catch (err: any) {
-      setMembersModalError(err.message || 'Nie udało się usunąć członka');
-    }
+  const handleRemoveMember = (projectId: number, memberUserId: number, memberName: string) => {
+    const isSelf = memberUserId === user?.id;
+    setConfirmDialog({
+      title: isSelf ? 'Opuść projekt' : 'Usuń członka zespołu',
+      message: isSelf
+        ? 'Czy na pewno chcesz opuścić ten projekt? Stracisz do niego dostęp.'
+        : `Czy na pewno chcesz usunąć użytkownika "${memberName}" z tego projektu?`,
+      confirmLabel: isSelf ? 'Opuść projekt' : 'Usuń członka',
+      isDanger: true,
+      onConfirm: async () => {
+        try {
+          await api.projects.removeMember(projectId, memberUserId);
+          showToast(isSelf ? 'Opuściłeś projekt' : `Użytkownik ${memberName} został usunięty`, 'info');
+          if (isSelf && selectedProjectId === projectId) {
+            setIsMembersModalOpen(false);
+            setSelectedProjectId(null);
+          } else {
+            await loadProjectMembers(projectId);
+          }
+          await loadProjects();
+          await loadTasks();
+        } catch (err: any) {
+          showToast(err.message || 'Nie udało się usunąć członka', 'error');
+        }
+      },
+    });
   };
 
+  // Tworzenie zadania
   const handleCreateTask = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTaskTitle.trim() || newTaskProjectId === '') return;
     try {
-      setGlobalError(null);
-
       let formattedDueDate: string | null = null;
       if (newTaskDueDate) {
         formattedDueDate = new Date(newTaskDueDate).toISOString();
@@ -258,42 +364,98 @@ export function App() {
       setNewTaskPriority('MEDIUM');
       setNewTaskDueDate('');
       setNewTaskAssignedToId('');
+      showToast('Zadanie dodane pomyślnie', 'success');
       await loadTasks();
       await loadProjects();
     } catch (err: any) {
-      setGlobalError(err.message || 'Błąd dodawania zadania');
+      showToast(err.message || 'Błąd dodawania zadania', 'error');
     }
   };
 
+  // Edycja zadania
+  const handleOpenEditTask = (task: Task) => {
+    setEditingTask(task);
+    setEditTaskTitle(task.title);
+    setEditTaskDesc(task.description || '');
+    setEditTaskPriority(task.priority);
+    setEditTaskDueDate(task.dueDate ? task.dueDate.split('T')[0] : '');
+    setEditTaskProjectId(task.projectId);
+    setEditTaskAssignedToId(task.assignedToId || '');
+    setEditTaskCompleted(task.completed);
+  };
+
+  const handleSaveEditTask = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingTask || !editTaskTitle.trim()) return;
+    try {
+      let formattedDueDate: string | null = null;
+      if (editTaskDueDate) {
+        formattedDueDate = new Date(editTaskDueDate).toISOString();
+      }
+
+      await api.tasks.update(editingTask.id, {
+        title: editTaskTitle.trim(),
+        description: editTaskDesc.trim() || null,
+        priority: editTaskPriority,
+        dueDate: formattedDueDate,
+        projectId: Number(editTaskProjectId),
+        assignedToId: editTaskAssignedToId !== '' ? Number(editTaskAssignedToId) : null,
+        completed: editTaskCompleted,
+      });
+
+      setEditingTask(null);
+      showToast('Zadanie zostało zaktualizowane', 'success');
+      await loadTasks();
+      await loadProjects();
+    } catch (err: any) {
+      showToast(err.message || 'Błąd aktualizacji zadania', 'error');
+    }
+  };
+
+  // Toggle ukończenia
   const handleToggleTask = async (task: Task) => {
     try {
-      setGlobalError(null);
-      await api.tasks.update(task.id, { completed: !task.completed });
+      const nextCompleted = !task.completed;
+      await api.tasks.update(task.id, { completed: nextCompleted });
+      showToast(
+        nextCompleted ? `Ukończono zadanie: "${task.title}"` : `Zadanie "${task.title}" powróciło do aktywnych`,
+        'success'
+      );
       await loadTasks();
     } catch (err: any) {
-      setGlobalError(err.message || 'Błąd aktualizacji zadania');
+      showToast(err.message || 'Błąd aktualizacji zadania', 'error');
     }
   };
 
+  // Zmiana przypisania
   const handleAssigneeChange = async (task: Task, newAssigneeId: number | null) => {
     try {
-      setGlobalError(null);
       await api.tasks.update(task.id, { assignedToId: newAssigneeId });
+      showToast('Zaktualizowano przypisaną osobę', 'success');
       await loadTasks();
     } catch (err: any) {
-      setGlobalError(err.message || 'Błąd zmiany przypisania zadania');
+      showToast(err.message || 'Błąd zmiany przypisania zadania', 'error');
     }
   };
 
-  const handleDeleteTask = async (id: number) => {
-    try {
-      setGlobalError(null);
-      await api.tasks.delete(id);
-      await loadTasks();
-      await loadProjects();
-    } catch (err: any) {
-      setGlobalError(err.message || 'Błąd usuwania zadania');
-    }
+  // Usuwanie zadania z potwierdzeniem
+  const handleDeleteTask = (task: Task) => {
+    setConfirmDialog({
+      title: 'Usuń zadanie',
+      message: `Czy na pewno chcesz usunąć zadanie "${task.title}"?`,
+      confirmLabel: 'Usuń zadanie',
+      isDanger: true,
+      onConfirm: async () => {
+        try {
+          await api.tasks.delete(task.id);
+          showToast('Zadanie zostało usunięte', 'info');
+          await loadTasks();
+          await loadProjects();
+        } catch (err: any) {
+          showToast(err.message || 'Błąd usuwania zadania', 'error');
+        }
+      },
+    });
   };
 
   const formatDueDate = (dateStr: string | null) => {
@@ -318,9 +480,25 @@ export function App() {
   const activeProject = projects.find((p) => p.id === selectedProjectId);
   const isOwnerOfActiveProject = activeProject?.userId === user?.id;
 
-  // Pobierz członków dla formularza nowego zadania
+  // Dostępni członkowie dla formularza tworzenia zadania
   const taskFormProject = projects.find((p) => p.id === Number(newTaskProjectId));
   const availableAssignees = taskFormProject?.members || [];
+
+  // Dostępni członkowie dla modala edycji zadania
+  const editTaskSelectedProject = projects.find((p) => p.id === Number(editTaskProjectId));
+  const editTaskAvailableAssignees = editTaskSelectedProject?.members || [];
+
+  // Obliczenia statystyk i paska postępu
+  const totalTasksCount = tasks.length;
+  const completedTasksCount = tasks.filter((t) => t.completed).length;
+  const activeTasksCount = totalTasksCount - completedTasksCount;
+  const completionRate =
+    totalTasksCount > 0 ? Math.round((completedTasksCount / totalTasksCount) * 100) : 0;
+
+  const highPriorityCount = tasks.filter((t) => t.priority === 'HIGH').length;
+  const mediumPriorityCount = tasks.filter((t) => t.priority === 'MEDIUM').length;
+  const lowPriorityCount = tasks.filter((t) => t.priority === 'LOW').length;
+  const overdueCount = tasks.filter((t) => isOverdue(t.dueDate, t.completed)).length;
 
   if (loadingUser) {
     return (
@@ -334,6 +512,25 @@ export function App() {
   if (!user) {
     return (
       <div className="app-container">
+        {/* Kontener powiadomień Toast */}
+        <div className="toast-container">
+          {toasts.map((toast) => (
+            <div key={toast.id} className={`toast-item ${toast.type}`}>
+              <div className="toast-message">
+                <span>{toast.type === 'success' ? '✓' : toast.type === 'error' ? '✕' : 'ℹ'}</span>
+                <span>{toast.message}</span>
+              </div>
+              <button
+                type="button"
+                className="toast-close"
+                onClick={() => removeToast(toast.id)}
+              >
+                ✕
+              </button>
+            </div>
+          ))}
+        </div>
+
         <div className="auth-wrapper">
           <div className="auth-tabs">
             <button
@@ -402,6 +599,25 @@ export function App() {
 
   return (
     <div className="app-container">
+      {/* Kontener powiadomień Toast */}
+      <div className="toast-container">
+        {toasts.map((toast) => (
+          <div key={toast.id} className={`toast-item ${toast.type}`}>
+            <div className="toast-message">
+              <span>{toast.type === 'success' ? '✓' : toast.type === 'error' ? '✕' : 'ℹ'}</span>
+              <span>{toast.message}</span>
+            </div>
+            <button
+              type="button"
+              className="toast-close"
+              onClick={() => removeToast(toast.id)}
+            >
+              ✕
+            </button>
+          </div>
+        ))}
+      </div>
+
       <header className="app-header">
         <h1>Menedżer Projektów i Zadań</h1>
         <div className="user-info">
@@ -425,7 +641,10 @@ export function App() {
 
             <div
               className={`project-item ${selectedProjectId === null ? 'active' : ''}`}
-              onClick={() => setSelectedProjectId(null)}
+              onClick={() => {
+                setSelectedProjectId(null);
+                setPage(1);
+              }}
             >
               <span>Wszystkie dostępne</span>
             </div>
@@ -436,7 +655,10 @@ export function App() {
                 <div
                   key={proj.id}
                   className={`project-item ${selectedProjectId === proj.id ? 'active' : ''}`}
-                  onClick={() => setSelectedProjectId(proj.id)}
+                  onClick={() => {
+                    setSelectedProjectId(proj.id);
+                    setPage(1);
+                  }}
                 >
                   <div className="project-info">
                     <div className="project-title-row">
@@ -446,7 +668,8 @@ export function App() {
                       </span>
                     </div>
                     <div className="project-subtext">
-                      Zadania: {proj._count?.tasks ?? 0} • Członkowie: {proj._count?.members ?? (proj.members?.length || 1)}
+                      Zadania: {proj._count?.tasks ?? 0} • Członkowie:{' '}
+                      {proj._count?.members ?? (proj.members?.length || 1)}
                     </div>
                   </div>
 
@@ -465,7 +688,19 @@ export function App() {
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          handleDeleteProject(proj.id);
+                          handleOpenEditProject(proj);
+                        }}
+                        className="btn-icon-secondary"
+                        title="Edytuj projekt"
+                      >
+                        ✏️
+                      </button>
+                    )}
+                    {isOwner && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteProject(proj);
                         }}
                         className="btn btn-danger"
                         title="Usuń projekt"
@@ -517,15 +752,62 @@ export function App() {
                 )}
               </h2>
 
-              {activeProject && (
-                <button
-                  type="button"
-                  className="btn btn-secondary members-btn"
-                  onClick={() => handleOpenMembersModal(activeProject.id)}
-                >
-                  👥 Członkowie ({activeProject._count?.members ?? (activeProject.members?.length || 1)})
-                </button>
-              )}
+              <div style={{ display: 'flex', gap: 8 }}>
+                {activeProject && isOwnerOfActiveProject && (
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={() => handleOpenEditProject(activeProject)}
+                    title="Edytuj nazwę lub opis projektu"
+                  >
+                    ✏️ Edytuj projekt
+                  </button>
+                )}
+                {activeProject && (
+                  <button
+                    type="button"
+                    className="btn btn-secondary members-btn"
+                    onClick={() => handleOpenMembersModal(activeProject.id)}
+                  >
+                    👥 Członkowie ({activeProject._count?.members ?? (activeProject.members?.length || 1)})
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Opis aktywnego projektu */}
+            {activeProject?.description && (
+              <div className="project-desc-banner">
+                <strong>Opis projektu:</strong> {activeProject.description}
+              </div>
+            )}
+
+            {/* Karta Statystyk i Pasek Postępu Projektu */}
+            <div className="project-stats-card">
+              <div className="stats-summary-row">
+                <span>
+                  Postęp realizacji: <strong>{completedTasksCount}</strong> z <strong>{totalTasksCount}</strong> zadań
+                </span>
+                <span>
+                  <strong>{completionRate}%</strong> ukończono
+                </span>
+              </div>
+              <div className="progress-bar-track">
+                <div
+                  className="progress-bar-fill"
+                  style={{ width: `${completionRate}%` }}
+                />
+              </div>
+              <div className="stats-badges-row">
+                <span className="stat-pill">📋 Aktywne: {activeTasksCount}</span>
+                <span className="stat-pill">✅ Zrobione: {completedTasksCount}</span>
+                <span className="stat-pill high">🔴 Wysoki: {highPriorityCount}</span>
+                <span className="stat-pill medium">🟡 Średni: {mediumPriorityCount}</span>
+                <span className="stat-pill low">🟢 Niski: {lowPriorityCount}</span>
+                {overdueCount > 0 && (
+                  <span className="stat-pill high">⚠️ Po terminie: {overdueCount}</span>
+                )}
+              </div>
             </div>
 
             {/* Wyszukiwarka i Sortowanie */}
@@ -535,14 +817,20 @@ export function App() {
                 className="search-input"
                 placeholder="🔍 Szukaj w zadaniach..."
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  setPage(1);
+                }}
               />
 
               <div className="sort-group">
                 <label>Sortuj:</label>
                 <select
                   value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value as any)}
+                  onChange={(e) => {
+                    setSortBy(e.target.value as any);
+                    setPage(1);
+                  }}
                 >
                   <option value="createdAt">Data dodania</option>
                   <option value="dueDate">Termin</option>
@@ -552,7 +840,10 @@ export function App() {
                 <button
                   type="button"
                   className="btn btn-secondary sort-btn"
-                  onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
+                  onClick={() => {
+                    setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+                    setPage(1);
+                  }}
                   title="Zmień kierunek sortowania"
                 >
                   {sortOrder === 'asc' ? '↑ Rosnąco' : '↓ Malejąco'}
@@ -565,26 +856,38 @@ export function App() {
               <div className="tasks-filters">
                 <button
                   className={`filter-btn ${taskFilter === 'all' ? 'active' : ''}`}
-                  onClick={() => setTaskFilter('all')}
+                  onClick={() => {
+                    setTaskFilter('all');
+                    setPage(1);
+                  }}
                 >
                   Wszystkie statusy
                 </button>
                 <button
                   className={`filter-btn ${taskFilter === 'active' ? 'active' : ''}`}
-                  onClick={() => setTaskFilter('active')}
+                  onClick={() => {
+                    setTaskFilter('active');
+                    setPage(1);
+                  }}
                 >
                   Do zrobienia
                 </button>
                 <button
                   className={`filter-btn ${taskFilter === 'completed' ? 'active' : ''}`}
-                  onClick={() => setTaskFilter('completed')}
+                  onClick={() => {
+                    setTaskFilter('completed');
+                    setPage(1);
+                  }}
                 >
                   Ukończone
                 </button>
 
                 <button
                   className={`filter-btn assignee-filter-btn ${assignedToMeOnly ? 'active' : ''}`}
-                  onClick={() => setAssignedToMeOnly(!assignedToMeOnly)}
+                  onClick={() => {
+                    setAssignedToMeOnly(!assignedToMeOnly);
+                    setPage(1);
+                  }}
                 >
                   📌 Przypisane do mnie
                 </button>
@@ -593,25 +896,37 @@ export function App() {
               <div className="priority-filters">
                 <button
                   className={`filter-btn priority-btn ${priorityFilter === 'ALL' ? 'active' : ''}`}
-                  onClick={() => setPriorityFilter('ALL')}
+                  onClick={() => {
+                    setPriorityFilter('ALL');
+                    setPage(1);
+                  }}
                 >
                   Wszystkie priorytety
                 </button>
                 <button
                   className={`filter-btn priority-btn high ${priorityFilter === 'HIGH' ? 'active' : ''}`}
-                  onClick={() => setPriorityFilter('HIGH')}
+                  onClick={() => {
+                    setPriorityFilter('HIGH');
+                    setPage(1);
+                  }}
                 >
                   Wysoki
                 </button>
                 <button
                   className={`filter-btn priority-btn medium ${priorityFilter === 'MEDIUM' ? 'active' : ''}`}
-                  onClick={() => setPriorityFilter('MEDIUM')}
+                  onClick={() => {
+                    setPriorityFilter('MEDIUM');
+                    setPage(1);
+                  }}
                 >
                   Średni
                 </button>
                 <button
                   className={`filter-btn priority-btn low ${priorityFilter === 'LOW' ? 'active' : ''}`}
-                  onClick={() => setPriorityFilter('LOW')}
+                  onClick={() => {
+                    setPriorityFilter('LOW');
+                    setPage(1);
+                  }}
                 >
                   Niski
                 </button>
@@ -780,21 +1095,318 @@ export function App() {
                           )}
                         </div>
                       </div>
-                      <button
-                        onClick={() => handleDeleteTask(task.id)}
-                        className="btn btn-danger"
-                        title="Usuń zadanie"
-                      >
-                        ✕
-                      </button>
+
+                      <div className="task-item-actions">
+                        <button
+                          onClick={() => handleOpenEditTask(task)}
+                          className="btn-icon-secondary"
+                          title="Edytuj zadanie"
+                        >
+                          ✏️
+                        </button>
+                        <button
+                          onClick={() => handleDeleteTask(task)}
+                          className="btn btn-danger"
+                          title="Usuń zadanie"
+                        >
+                          ✕
+                        </button>
+                      </div>
                     </div>
                   );
                 })}
               </div>
             )}
+
+            {/* Paginacja zadań */}
+            {totalTasks > 0 && (
+              <div className="pagination-container">
+                <div className="pagination-info">
+                  <span>
+                    Wyświetlono {Math.min((page - 1) * limit + 1, totalTasks)}–
+                    {Math.min(page * limit, totalTasks)} z {totalTasks} zadań
+                  </span>
+
+                  <div className="pagination-limit-select">
+                    <label>Na stronę:</label>
+                    <select
+                      value={limit}
+                      onChange={(e) => {
+                        setLimit(Number(e.target.value));
+                        setPage(1);
+                      }}
+                    >
+                      <option value={5}>5</option>
+                      <option value={10}>10</option>
+                      <option value={20}>20</option>
+                      <option value={50}>50</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="pagination-nav">
+                  <button
+                    type="button"
+                    className="pagination-btn"
+                    disabled={page <= 1}
+                    onClick={() => setPage(1)}
+                    title="Pierwsza strona"
+                  >
+                    «
+                  </button>
+                  <button
+                    type="button"
+                    className="pagination-btn"
+                    disabled={page <= 1}
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    title="Poprzednia strona"
+                  >
+                    ‹ Poprzednia
+                  </button>
+
+                  {Array.from({ length: totalPages }, (_, i) => i + 1)
+                    .filter((p) => p === 1 || p === totalPages || Math.abs(p - page) <= 2)
+                    .map((p, idx, arr) => {
+                      const prevPage = arr[idx - 1];
+                      const hasGap = prevPage && p - prevPage > 1;
+                      return (
+                        <React.Fragment key={p}>
+                          {hasGap && <span style={{ padding: '0 4px', color: '#999' }}>…</span>}
+                          <button
+                            type="button"
+                            className={`pagination-btn ${p === page ? 'active' : ''}`}
+                            onClick={() => setPage(p)}
+                          >
+                            {p}
+                          </button>
+                        </React.Fragment>
+                      );
+                    })}
+
+                  <button
+                    type="button"
+                    className="pagination-btn"
+                    disabled={page >= totalPages}
+                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                    title="Następna strona"
+                  >
+                    Następna ›
+                  </button>
+                  <button
+                    type="button"
+                    className="pagination-btn"
+                    disabled={page >= totalPages}
+                    onClick={() => setPage(totalPages)}
+                    title="Ostatnia strona"
+                  >
+                    »
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
+
+      {/* Modal edycji projektu */}
+      {editingProject && (
+        <div className="modal-backdrop" onClick={() => setEditingProject(null)}>
+          <div className="modal-box" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Edycja projektu: {editingProject.name}</h3>
+              <button
+                type="button"
+                className="close-btn"
+                onClick={() => setEditingProject(null)}
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEditProject}>
+              <div className="form-group">
+                <label>Nazwa projektu</label>
+                <input
+                  type="text"
+                  required
+                  value={editProjectName}
+                  onChange={(e) => setEditProjectName(e.target.value)}
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Opis projektu</label>
+                <textarea
+                  rows={3}
+                  placeholder="Wpisz opis projektu..."
+                  value={editProjectDesc}
+                  onChange={(e) => setEditProjectDesc(e.target.value)}
+                />
+              </div>
+
+              <div className="modal-actions">
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setEditingProject(null)}
+                >
+                  Anuluj
+                </button>
+                <button type="submit" className="btn">
+                  Zapisz zmiany
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal edycji zadania */}
+      {editingTask && (
+        <div className="modal-backdrop" onClick={() => setEditingTask(null)}>
+          <div className="modal-box" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Edycja zadania</h3>
+              <button
+                type="button"
+                className="close-btn"
+                onClick={() => setEditingTask(null)}
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEditTask}>
+              <div className="form-group">
+                <label>Tytuł zadania</label>
+                <input
+                  type="text"
+                  required
+                  value={editTaskTitle}
+                  onChange={(e) => setEditTaskTitle(e.target.value)}
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Opis zadania</label>
+                <textarea
+                  rows={3}
+                  placeholder="Opis zadania (opcjonalnie)"
+                  value={editTaskDesc}
+                  onChange={(e) => setEditTaskDesc(e.target.value)}
+                />
+              </div>
+
+              <div className="form-row-2">
+                <div className="form-group">
+                  <label>Projekt</label>
+                  <select
+                    value={editTaskProjectId}
+                    onChange={(e) => {
+                      const newPid = Number(e.target.value);
+                      setEditTaskProjectId(newPid);
+                      setEditTaskAssignedToId('');
+                    }}
+                    required
+                  >
+                    {projects.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label>Priorytet</label>
+                  <select
+                    value={editTaskPriority}
+                    onChange={(e) => setEditTaskPriority(e.target.value as Priority)}
+                  >
+                    <option value="LOW">Niski (LOW)</option>
+                    <option value="MEDIUM">Średni (MEDIUM)</option>
+                    <option value="HIGH">Wysoki (HIGH)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="form-row-2">
+                <div className="form-group">
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <label style={{ margin: 0 }}>Termin (dueDate)</label>
+                    {editTaskDueDate && (
+                      <button
+                        type="button"
+                        onClick={() => setEditTaskDueDate('')}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: '#c5221f',
+                          cursor: 'pointer',
+                          fontSize: '0.78rem',
+                        }}
+                      >
+                        Wyczyść
+                      </button>
+                    )}
+                  </div>
+                  <input
+                    type="date"
+                    style={{ marginTop: 4 }}
+                    value={editTaskDueDate}
+                    onChange={(e) => setEditTaskDueDate(e.target.value)}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Przypisz do</label>
+                  <select
+                    value={editTaskAssignedToId}
+                    onChange={(e) =>
+                      setEditTaskAssignedToId(
+                        e.target.value === '' ? '' : Number(e.target.value)
+                      )
+                    }
+                  >
+                    <option value="">Nieprzypisane</option>
+                    {editTaskAvailableAssignees.map((m) => (
+                      <option key={m.userId} value={m.userId}>
+                        {m.user.name} {m.userId === user.id ? '(Ty)' : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }}>
+                <input
+                  type="checkbox"
+                  id="editCompletedCheck"
+                  checked={editTaskCompleted}
+                  onChange={(e) => setEditTaskCompleted(e.target.checked)}
+                  style={{ width: 'auto', margin: 0 }}
+                />
+                <label htmlFor="editCompletedCheck" style={{ margin: 0, cursor: 'pointer' }}>
+                  Oznacz jako ukończone
+                </label>
+              </div>
+
+              <div className="modal-actions" style={{ marginTop: 20 }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setEditingTask(null)}
+                >
+                  Anuluj
+                </button>
+                <button type="submit" className="btn">
+                  Zapisz zmiany
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Modal zarządzania członkami projektu */}
       {isMembersModalOpen && activeProject && (
@@ -853,7 +1465,7 @@ export function App() {
                         <button
                           type="button"
                           className="btn btn-danger btn-sm"
-                          onClick={() => handleRemoveMember(activeProject.id, member.userId)}
+                          onClick={() => handleRemoveMember(activeProject.id, member.userId, member.user.name)}
                           title={member.userId === user.id ? 'Opuść projekt' : 'Usuń członka'}
                         >
                           {member.userId === user.id ? 'Opuść' : 'Usuń'}
@@ -863,6 +1475,36 @@ export function App() {
                   </div>
                 );
               })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal potwierdzenia akcji (zamiast window.confirm) */}
+      {confirmDialog && (
+        <div className="modal-backdrop" onClick={() => setConfirmDialog(null)}>
+          <div className="confirm-modal-box" onClick={(e) => e.stopPropagation()}>
+            <h3>{confirmDialog.title}</h3>
+            <div className="confirm-modal-message">{confirmDialog.message}</div>
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => setConfirmDialog(null)}
+              >
+                {confirmDialog.cancelLabel || 'Anuluj'}
+              </button>
+              <button
+                type="button"
+                className={`btn ${confirmDialog.isDanger ? 'btn-danger' : ''}`}
+                onClick={async () => {
+                  const onConfirm = confirmDialog.onConfirm;
+                  setConfirmDialog(null);
+                  await onConfirm();
+                }}
+              >
+                {confirmDialog.confirmLabel || 'Potwierdź'}
+              </button>
             </div>
           </div>
         </div>

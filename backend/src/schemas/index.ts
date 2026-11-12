@@ -110,4 +110,12 @@ export const taskQuerySchema = z.object({
   search: z.string().trim().min(1).optional(),
   sortBy: z.enum(['createdAt', 'dueDate', 'title', 'priority']).optional(),
   sortOrder: z.enum(['asc', 'desc']).optional(),
+  page: z
+    .union([z.string().regex(/^\d+$/).transform(Number), z.number().int().positive()])
+    .refine((val) => val >= 1, 'Page must be at least 1')
+    .optional(),
+  limit: z
+    .union([z.string().regex(/^\d+$/).transform(Number), z.number().int().positive()])
+    .refine((val) => val >= 1 && val <= 100, 'Limit must be between 1 and 100')
+    .optional(),
 });

@@ -27,9 +27,23 @@ services:
       - DATABASE_URL=postgresql://appuser:devpassword@database:5432/myapp?schema=public
       - PORT=3001
       - JWT_SECRET=dev-secret-key-change-in-production-1234567890
+      - SMTP_HOST=mailpit
+      - SMTP_PORT=1025
+      - EMAIL_FROM=no-reply@taskmanager.local
+      - FRONTEND_URL=http://localhost:3000
     depends_on:
       database:
         condition: service_healthy
+      mailpit:
+        condition: service_started
+
+  mailpit:
+    container_name: term-viewer-mailpit
+    image: axllent/mailpit:latest
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+    restart: unless-stopped
 
   frontend:
     container_name: termviewer-frontend
