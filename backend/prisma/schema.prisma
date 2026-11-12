@@ -18,7 +18,22 @@ model User {
   memberships    ProjectMember[]
   tasks          Task[]          @relation("TaskCreator")
   assignedTasks  Task[]          @relation("TaskAssignee")
+  comments       TaskComment[]
   refreshTokens  RefreshToken[]
+  passwordResetTokens PasswordResetToken[]
+}
+
+model PasswordResetToken {
+  id        Int       @id @default(autoincrement())
+  token     String    @unique
+  userId    Int
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime  @default(now())
+  usedAt    DateTime?
+
+  @@index([userId])
+  @@index([token])
 }
 
 model RefreshToken {
@@ -92,10 +107,26 @@ model Task {
 
   assignedToId Int?
   assignedTo   User?    @relation("TaskAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
+  comments     TaskComment[]
 
   @@index([userId])
   @@index([assignedToId])
   @@index([projectId])
   @@index([priority])
   @@index([dueDate])
+}
+
+model TaskComment {
+  id        Int      @id @default(autoincrement())
+  content   String
+  createdAt DateTime @default(now())
+
+  taskId    Int
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([taskId])
+  @@index([userId])
 }

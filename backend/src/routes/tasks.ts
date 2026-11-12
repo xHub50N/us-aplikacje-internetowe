@@ -4,12 +4,13 @@ import { prisma } from '../lib/prisma.js';
 import { authenticateToken } from '../middleware/auth.js';
 import { validate } from '../middleware/validate.js';
 import { AppError } from '../lib/errors.js';
-import { sendTaskAssignedEmail } from '../lib/email.js';
+import { sendTaskAssignedEmail, sendTaskCommentEmail } from '../lib/email.js';
 import {
   numericIdParamSchema,
   createTaskSchema,
   updateTaskSchema,
   taskQuerySchema,
+  createTaskCommentSchema,
 } from '../schemas/index.js';
 
 export const tasksRouter = Router();
@@ -136,6 +137,9 @@ tasksRouter.get(
                   name: true,
                 },
               },
+              _count: {
+                select: { comments: true },
+              },
             },
           }),
         ]);
@@ -169,6 +173,9 @@ tasksRouter.get(
               id: true,
               name: true,
             },
+          },
+          _count: {
+            select: { comments: true },
           },
         },
       });
@@ -457,6 +464,165 @@ tasksRouter.delete(
       });
 
       res.json({ message: 'Task deleted successfully' });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// GET /api/tasks/:id/comments - lista komentarzy do zadania
+tasksRouter.get(
+  '/:id/comments',
+  validate({ params: numericIdParamSchema }),
+  async (req, res, next) => {
+    const userId = req.user!.id;
+    const taskId = Number(req.params.id);
+
+    try {
+      const task = await prisma.task.findUnique({
+        where: { id: taskId },
+        include: { project: true },
+      });
+
+      if (!task) {
+        throw AppError.notFound('Task not found');
+      }
+
+      const hasAccess = await userHasProjectAccess(task.projectId, userId);
+      if (!hasAccess) {
+        throw AppError.notFound('Task not found');
+      }
+
+      const comments = await prisma.taskComment.findMany({
+        where: { taskId },
+        orderBy: { createdAt: 'asc' },
+        include: {
+          user: {
+            select: { id: true, name: true, email: true },
+          },
+        },
+      });
+
+      res.json(comments);
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// POST /api/tasks/:id/comments - dodanie komentarza do zadania
+tasksRouter.post(
+  '/:id/comments',
+  validate({ params: numericIdParamSchema, body: createTaskCommentSchema }),
+  async (req, res, next) => {
+    const userId = req.user!.id;
+    const taskId = Number(req.params.id);
+    const { content } = req.body;
+
+    try {
+      const task = await prisma.task.findUnique({
+        where: { id: taskId },
+        include: {
+          project: true,
+          assignedTo: true,
+          user: true,
+        },
+      });
+
+      if (!task) {
+        throw AppError.notFound('Task not found');
+      }
+
+      const hasAccess = await userHasProjectAccess(task.projectId, userId);
+      if (!hasAccess) {
+        throw AppError.notFound('Task not found');
+      }
+
+      const comment = await prisma.taskComment.create({
+        data: {
+          taskId,
+          userId,
+          content,
+        },
+        include: {
+          user: {
+            select: { id: true, name: true, email: true },
+          },
+        },
+      });
+
+      // Powiadomienie e-mail (fail-safe) do przypisanej osoby oraz autora
+      const currentUser = comment.user;
+      const notifiedEmails = new Set<string>();
+
+      if (task.assignedTo && task.assignedTo.id !== userId) {
+        notifiedEmails.add(task.assignedTo.email);
+        void sendTaskCommentEmail({
+          to: task.assignedTo.email,
+          recipientName: task.assignedTo.name,
+          commenterName: currentUser.name,
+          taskTitle: task.title,
+          projectName: task.project.name,
+          commentContent: content,
+        });
+      }
+
+      if (task.user && task.user.id !== userId && !notifiedEmails.has(task.user.email)) {
+        void sendTaskCommentEmail({
+          to: task.user.email,
+          recipientName: task.user.name,
+          commenterName: currentUser.name,
+          taskTitle: task.title,
+          projectName: task.project.name,
+          commentContent: content,
+        });
+      }
+
+      res.status(201).json(comment);
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// DELETE /api/tasks/:id/comments/:commentId - usunięcie komentarza
+tasksRouter.delete(
+  '/:id/comments/:commentId',
+  async (req, res, next) => {
+    const userId = req.user!.id;
+    const taskId = Number(req.params.id);
+    const commentId = Number(req.params.commentId);
+
+    if (!Number.isInteger(taskId) || !Number.isInteger(commentId)) {
+      return next(AppError.badRequest('Invalid ID parameter'));
+    }
+
+    try {
+      const comment = await prisma.taskComment.findUnique({
+        where: { id: commentId },
+        include: {
+          task: {
+            include: { project: true },
+          },
+        },
+      });
+
+      if (!comment || comment.taskId !== taskId) {
+        throw AppError.notFound('Comment not found');
+      }
+
+      const isCommentAuthor = comment.userId === userId;
+      const isProjectOwner = comment.task.project.userId === userId;
+
+      if (!isCommentAuthor && !isProjectOwner) {
+        throw AppError.forbidden('You can only delete your own comments');
+      }
+
+      await prisma.taskComment.delete({
+        where: { id: commentId },
+      });
+
+      res.json({ message: 'Comment deleted successfully' });
     } catch (error) {
       next(error);
     }

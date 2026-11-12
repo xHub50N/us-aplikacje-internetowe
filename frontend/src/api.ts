@@ -2,27 +2,37 @@ const API_BASE_URL =
   process.env.REACT_APP_API_URL || 'http://localhost:3001/api';
 
 function getToken(): string | null {
-  return localStorage.getItem('token');
+  return localStorage.getItem('token') || sessionStorage.getItem('token');
 }
 
 function getRefreshToken(): string | null {
-  return localStorage.getItem('refreshToken');
+  return localStorage.getItem('refreshToken') || sessionStorage.getItem('refreshToken');
 }
 
-export function setTokens(tokens: {
-  token?: string | null;
-  refreshToken?: string | null;
-}) {
+export function setTokens(
+  tokens: {
+    token?: string | null;
+    refreshToken?: string | null;
+  },
+  rememberMe: boolean = true
+) {
+  const targetStorage = rememberMe ? localStorage : sessionStorage;
+  const otherStorage = rememberMe ? sessionStorage : localStorage;
+
   if (tokens.token) {
-    localStorage.setItem('token', tokens.token);
+    targetStorage.setItem('token', tokens.token);
+    otherStorage.removeItem('token');
   } else if (tokens.token === null) {
     localStorage.removeItem('token');
+    sessionStorage.removeItem('token');
   }
 
   if (tokens.refreshToken) {
-    localStorage.setItem('refreshToken', tokens.refreshToken);
+    targetStorage.setItem('refreshToken', tokens.refreshToken);
+    otherStorage.removeItem('refreshToken');
   } else if (tokens.refreshToken === null) {
     localStorage.removeItem('refreshToken');
+    sessionStorage.removeItem('refreshToken');
   }
 }
 
@@ -31,13 +41,58 @@ export function setToken(token: string | null) {
   setTokens({ token });
 }
 
-let isRefreshing = false;
+let refreshPromise: Promise<string | null> | null = null;
+
+async function refreshAccessToken(): Promise<string | null> {
+  const refreshToken = getRefreshToken();
+  if (!refreshToken) {
+    setTokens({ token: null, refreshToken: null });
+    return null;
+  }
+
+  try {
+    const refreshResponse = await fetch(`${API_BASE_URL}/auth/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refreshToken }),
+    });
+
+    if (refreshResponse.ok) {
+      const refreshData = await refreshResponse.json();
+      const wasInLocalStorage = !!localStorage.getItem('refreshToken');
+      setTokens(
+        {
+          token: refreshData.token,
+          refreshToken: refreshData.refreshToken,
+        },
+        wasInLocalStorage
+      );
+      return refreshData.token as string;
+    } else {
+      setTokens({ token: null, refreshToken: null });
+      window.dispatchEvent(new Event('auth:unauthorized'));
+      return null;
+    }
+  } catch {
+    setTokens({ token: null, refreshToken: null });
+    window.dispatchEvent(new Event('auth:unauthorized'));
+    return null;
+  }
+}
+
+const noRefreshEndpoints = [
+  '/auth/login',
+  '/auth/register',
+  '/auth/refresh',
+  '/auth/forgot-password',
+  '/auth/reset-password',
+];
 
 async function request<T>(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<T> {
-  const token = getToken();
+  let token = getToken();
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...(options.headers as Record<string, string>),
@@ -52,39 +107,21 @@ async function request<T>(
     headers,
   });
 
-  // Jeśli token wygasł (401), spróbuj cichego odświeżenia przez refreshToken
-  if (response.status === 401 && !endpoint.startsWith('/auth/') && !isRefreshing) {
-    const refreshToken = getRefreshToken();
-    if (refreshToken) {
-      isRefreshing = true;
-      try {
-        const refreshResponse = await fetch(`${API_BASE_URL}/auth/refresh`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ refreshToken }),
-        });
+  // Jeśli token wygasł (401) i zapytanie dotyczy chronionego endpointu:
+  if (response.status === 401 && !noRefreshEndpoints.includes(endpoint)) {
+    if (!refreshPromise) {
+      refreshPromise = refreshAccessToken().finally(() => {
+        refreshPromise = null;
+      });
+    }
 
-        if (refreshResponse.ok) {
-          const refreshData = await refreshResponse.json();
-          setTokens({
-            token: refreshData.token,
-            refreshToken: refreshData.refreshToken,
-          });
-
-          // Ponów pierwotne zapytanie z nowym tokenem
-          headers['Authorization'] = `Bearer ${refreshData.token}`;
-          response = await fetch(`${API_BASE_URL}${endpoint}`, {
-            ...options,
-            headers,
-          });
-        } else {
-          setTokens({ token: null, refreshToken: null });
-        }
-      } catch {
-        setTokens({ token: null, refreshToken: null });
-      } finally {
-        isRefreshing = false;
-      }
+    const newToken = await refreshPromise;
+    if (newToken) {
+      headers['Authorization'] = `Bearer ${newToken}`;
+      response = await fetch(`${API_BASE_URL}${endpoint}`, {
+        ...options,
+        headers,
+      });
     }
   }
 
@@ -163,6 +200,22 @@ export interface Task {
     id: number;
     name: string;
   };
+  _count?: {
+    comments: number;
+  };
+}
+
+export interface TaskComment {
+  id: number;
+  content: string;
+  createdAt: string;
+  taskId: number;
+  userId: number;
+  user: {
+    id: number;
+    name: string;
+    email: string;
+  };
 }
 
 export interface TaskQueryParams {
@@ -205,6 +258,16 @@ export const api = {
         }
       ),
     me: () => request<{ user: User }>('/auth/me'),
+    forgotPassword: (body: { email: string }) =>
+      request<{ message: string }>('/auth/forgot-password', {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }),
+    resetPassword: (body: { token: string; password: string }) =>
+      request<{ message: string }>('/auth/reset-password', {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }),
     logout: () => {
       const refreshToken = getRefreshToken();
       return request<{ message: string }>('/auth/logout', {
@@ -318,6 +381,17 @@ export const api = {
       }),
     delete: (id: number) =>
       request<{ message: string }>(`/tasks/${id}`, {
+        method: 'DELETE',
+      }),
+    getComments: (taskId: number) =>
+      request<TaskComment[]>(`/tasks/${taskId}/comments`),
+    addComment: (taskId: number, body: { content: string }) =>
+      request<TaskComment>(`/tasks/${taskId}/comments`, {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }),
+    deleteComment: (taskId: number, commentId: number) =>
+      request<{ message: string }>(`/tasks/${taskId}/comments/${commentId}`, {
         method: 'DELETE',
       }),
   },

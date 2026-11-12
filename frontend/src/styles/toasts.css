@@ -1,0 +1,72 @@
+/* ==========================================================================
+   Toast Notifications
+   ========================================================================== */
+
+.toast-container {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 9999;
+}
+
+.toast-item {
+  background-color: var(--bg-panel);
+  border: 1px solid var(--border-muted);
+  color: var(--text-primary);
+  padding: 10px 16px;
+  border-radius: var(--radius-md);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 260px;
+  max-width: 380px;
+  font-size: 12px;
+  animation: slideToast 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes slideToast {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.toast-item.success {
+  border-left: 3px solid #10b981;
+}
+
+.toast-item.error {
+  border-left: 3px solid #f43f5e;
+}
+
+.toast-item.info {
+  border-left: 3px solid #3b82f6;
+}
+
+.toast-message {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.toast-close {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 2px;
+  font-size: 12px;
+}
+
+.toast-close:hover {
+  color: var(--text-primary);
+}

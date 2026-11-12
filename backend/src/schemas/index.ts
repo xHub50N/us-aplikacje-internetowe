@@ -3,12 +3,21 @@ import { z } from 'zod';
 export const registerSchema = z.object({
   name: z.string().trim().min(1, 'Name is required').max(100, 'Name must not exceed 100 characters'),
   email: z.string().trim().toLowerCase().email('A valid email address is required'),
-  password: z.string().min(6, 'Password must be at least 6 characters long').max(128, 'Password must not exceed 128 characters'),
+  password: z.string().min(8, 'Password must be at least 8 characters long').max(128, 'Password must not exceed 128 characters'),
 });
 
 export const loginSchema = z.object({
   email: z.string().trim().toLowerCase().email('A valid email address is required'),
   password: z.string().min(1, 'Password is required'),
+});
+
+export const forgotPasswordSchema = z.object({
+  email: z.string().trim().toLowerCase().email('A valid email address is required'),
+});
+
+export const resetPasswordSchema = z.object({
+  token: z.string().trim().min(1, 'Reset token is required'),
+  password: z.string().min(8, 'Password must be at least 8 characters long').max(128, 'Password must not exceed 128 characters'),
 });
 
 export const refreshTokenSchema = z.object({
@@ -118,4 +127,8 @@ export const taskQuerySchema = z.object({
     .union([z.string().regex(/^\d+$/).transform(Number), z.number().int().positive()])
     .refine((val) => val >= 1 && val <= 100, 'Limit must be between 1 and 100')
     .optional(),
+});
+
+export const createTaskCommentSchema = z.object({
+  content: z.string().trim().min(1, 'Comment content cannot be empty').max(2000, 'Comment must not exceed 2000 characters'),
 });

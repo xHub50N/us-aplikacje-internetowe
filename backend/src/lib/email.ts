@@ -144,3 +144,78 @@ export async function sendTaskAssignedEmail(params: {
 
   return sendEmail({ to, subject, text, html });
 }
+
+// Szablon resetowania hasła
+export async function sendPasswordResetEmail(params: {
+  to: string;
+  recipientName: string;
+  resetUrl: string;
+  expiresInMinutes?: number;
+}): Promise<boolean> {
+  const { to, recipientName, resetUrl, expiresInMinutes = 60 } = params;
+  const subject = 'Resetowanie hasła w Task Manager';
+  const text = `Cześć ${recipientName},\n\nOtrzymaliśmy prośbę o zresetowanie hasła do Twojego konta w Task Managerze.\nAby ustawić nowe hasło, kliknij poniższy link (ważny przez ${expiresInMinutes} minut):\n${resetUrl}\n\nJeśli to nie Ty prosiłeś o reset hasła, zignoruj tę wiadomość.\n\nPozdrawiamy,\nZespół Task Manager`;
+
+  const html = `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 560px; margin: 0 auto; padding: 24px; border: 1px solid #e0e0e0; border-radius: 8px; background: #ffffff;">
+      <h2 style="color: #1a73e8; margin-top: 0;">Resetowanie hasła</h2>
+      <p style="font-size: 16px; color: #333;">Cześć <strong>${recipientName}</strong>,</p>
+      <p style="font-size: 15px; color: #555; line-height: 1.5;">
+        Otrzymaliśmy prośbę o zresetowanie hasła do Twojego konta. Kliknij poniższy przycisk, aby zdefiniować nowe hasło:
+      </p>
+      <div style="margin: 28px 0; text-align: center;">
+        <a href="${resetUrl}" style="background-color: #1a73e8; color: #ffffff; text-decoration: none; padding: 13px 28px; border-radius: 6px; font-weight: 600; font-size: 15px; display: inline-block;">
+          Ustaw nowe hasło
+        </a>
+      </div>
+      <p style="font-size: 13px; color: #666; line-height: 1.4;">
+        Link jest ważny przez <strong>${expiresInMinutes} minut</strong>. Jeśli przycisk nie działa, skopiuj i wklej ten adres do przeglądarki:<br />
+        <a href="${resetUrl}" style="color: #1a73e8; word-break: break-all;">${resetUrl}</a>
+      </p>
+      <hr style="margin-top: 28px; border: none; border-top: 1px solid #eee;" />
+      <p style="font-size: 12px; color: #888; text-align: center; margin-bottom: 0;">
+        Jeśli nie prosiłeś o zmianę hasła, możesz bezpiecznie zignorować tę wiadomość — Twoje dotychczasowe hasło pozostaje bezpieczne.
+      </p>
+    </div>
+  `;
+
+  return sendEmail({ to, subject, text, html });
+}
+
+// Szablon powiadomienia o nowym komentarzu
+export async function sendTaskCommentEmail(params: {
+  to: string;
+  recipientName: string;
+  commenterName: string;
+  taskTitle: string;
+  projectName: string;
+  commentContent: string;
+}): Promise<boolean> {
+  const { to, recipientName, commenterName, taskTitle, projectName, commentContent } = params;
+  const subject = `Nowy komentarz w zadaniu "${taskTitle}" (${projectName})`;
+  const text = `Cześć ${recipientName},\n\n${commenterName} dodał(a) komentarz do zadania "${taskTitle}" w projekcie "${projectName}":\n\n"${commentContent}"\n\nAby odpowiedzieć lub zobaczyć zadanie, przejdź do aplikacji:\n${config.email.appUrl}\n\nPozdrawiamy,\nZespół Task Manager`;
+
+  const html = `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 560px; margin: 0 auto; padding: 24px; border: 1px solid #e0e0e0; border-radius: 8px; background: #ffffff;">
+      <h2 style="color: #6366f1; margin-top: 0;">Nowy komentarz do zadania</h2>
+      <p style="font-size: 15px; color: #333;">Cześć <strong>${recipientName}</strong>,</p>
+      <p style="font-size: 14px; color: #555; line-height: 1.5;">
+        <strong>${commenterName}</strong> skomentował(a) zadanie <strong>"${taskTitle}"</strong> w projekcie <em>${projectName}</em>:
+      </p>
+      <div style="background: #f1f5f9; border-left: 4px solid #6366f1; padding: 14px 16px; margin: 18px 0; border-radius: 4px; font-style: italic; color: #1e293b; font-size: 14px; white-space: pre-wrap;">
+        ${commentContent}
+      </div>
+      <div style="margin-top: 24px; text-align: center;">
+        <a href="${config.email.appUrl}" style="background-color: #6366f1; color: #ffffff; text-decoration: none; padding: 12px 24px; border-radius: 6px; font-weight: 600; font-size: 14px; display: inline-block;">
+          Otwórz zadanie w aplikacji
+        </a>
+      </div>
+      <hr style="margin-top: 28px; border: none; border-top: 1px solid #eee;" />
+      <p style="font-size: 12px; color: #888; text-align: center; margin-bottom: 0;">
+        Wiadomość wygenerowana automatycznie przez system Task Manager.
+      </p>
+    </div>
+  `;
+
+  return sendEmail({ to, subject, text, html });
+}

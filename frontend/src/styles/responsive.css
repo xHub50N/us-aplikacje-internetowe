@@ -1,0 +1,35 @@
+/* ==========================================================================
+   Responsive Adaptations
+   ========================================================================== */
+
+@media (max-width: 1024px) {
+  .backlog-row {
+    grid-template-columns: 32px 64px 1fr 110px 120px 60px;
+  }
+  .task-duedate-col {
+    display: none;
+  }
+  .kanban-board-container {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .app-sidebar {
+    position: fixed;
+    left: -260px;
+  }
+  .app-sidebar.mobile-open {
+    left: 0;
+  }
+  .topnav-search-box {
+    display: none;
+  }
+  .backlog-row {
+    grid-template-columns: 28px 1fr 50px;
+  }
+  .task-status-col,
+  .task-assignee-col {
+    display: none;
+  }
+}
