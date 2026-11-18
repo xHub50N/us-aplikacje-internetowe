@@ -4,11 +4,12 @@
 
 .auth-container {
   min-height: 100vh;
+  width: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 24px;
-  background: radial-gradient(circle at 50% 20%, #151d30 0%, #090d16 80%);
+  background-color: var(--bg-app);
 }
 
 .auth-card {

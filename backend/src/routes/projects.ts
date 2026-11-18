@@ -4,6 +4,7 @@ import { authenticateToken } from '../middleware/auth.js';
 import { validate } from '../middleware/validate.js';
 import { AppError } from '../lib/errors.js';
 import { sendProjectInvitationEmail } from '../lib/email.js';
+import { sseManager } from '../lib/sse.js';
 import {
   numericIdParamSchema,
   createProjectSchema,
@@ -180,6 +181,8 @@ const updateProjectHandler = async (req: any, res: any, next: any) => {
       },
     });
 
+    sseManager.broadcast('project:updated', { project: updated, projectId: updated.id });
+
     res.json(updated);
   } catch (error) {
     next(error);
@@ -221,6 +224,8 @@ projectsRouter.delete(
       await prisma.project.delete({
         where: { id: projectId },
       });
+
+      sseManager.broadcast('project:deleted', { projectId });
 
       res.json({ message: 'Project deleted successfully' });
     } catch (error) {
@@ -320,6 +325,8 @@ projectsRouter.post(
         inviterName: membership.project.user?.name || 'Właściciel projektu',
       });
 
+      sseManager.broadcast('project:members_updated', { projectId });
+
       res.status(201).json(newMember);
     } catch (error) {
       next(error);
@@ -370,6 +377,8 @@ projectsRouter.delete(
           projectId_userId: { projectId, userId: targetUserId },
         },
       });
+
+      sseManager.broadcast('project:members_updated', { projectId });
 
       res.json({ message: 'Member removed successfully' });
     } catch (error) {

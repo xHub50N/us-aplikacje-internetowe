@@ -46,7 +46,7 @@ export const updateProjectSchema = z.object({
   description: z.string().trim().max(1000, 'Description must not exceed 1000 characters').nullable().optional(),
 });
 
-export const projectRoleEnum = z.enum(['OWNER', 'MEMBER']);
+export const projectRoleEnum = z.enum(['OWNER', 'MEMBER', 'VIEWER']);
 
 export const addProjectMemberSchema = z.object({
   email: z.string().trim().toLowerCase().email('A valid email address is required'),

@@ -140,7 +140,7 @@ export interface User {
   name: string;
 }
 
-export type ProjectRole = 'OWNER' | 'MEMBER';
+export type ProjectRole = 'OWNER' | 'MEMBER' | 'VIEWER';
 
 export interface ProjectMember {
   id: number;
@@ -396,3 +396,9 @@ export const api = {
       }),
   },
 };
+
+export function createEventSource(): EventSource | null {
+  const token = getToken();
+  if (!token) return null;
+  return new EventSource(`${API_BASE_URL}/events?token=${encodeURIComponent(token)}`);
+}

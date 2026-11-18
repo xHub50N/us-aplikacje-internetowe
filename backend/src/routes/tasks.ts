@@ -5,6 +5,7 @@ import { authenticateToken } from '../middleware/auth.js';
 import { validate } from '../middleware/validate.js';
 import { AppError } from '../lib/errors.js';
 import { sendTaskAssignedEmail, sendTaskCommentEmail } from '../lib/email.js';
+import { sseManager } from '../lib/sse.js';
 import {
   numericIdParamSchema,
   createTaskSchema,
@@ -18,24 +19,37 @@ export const tasksRouter = Router();
 // Wymagaj uwierzytelnienia dla wszystkich tras zadań
 tasksRouter.use(authenticateToken);
 
-// Pomocnik weryfikujący dostęp użytkownika do projektu
-async function userHasProjectAccess(rawProjectId: unknown, userId: number): Promise<boolean> {
+// Pomocnik weryfikujący rolę użytkownika w projekcie
+async function getUserProjectRole(
+  rawProjectId: unknown,
+  userId: number
+): Promise<'OWNER' | 'MEMBER' | 'VIEWER' | null> {
   const projectId = Number(rawProjectId);
   if (!Number.isInteger(projectId) || projectId <= 0) {
-    return false;
+    return null;
   }
+
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+    select: { userId: true },
+  });
+  if (!project) return null;
+  if (project.userId === userId) return 'OWNER';
 
   const member = await prisma.projectMember.findUnique({
     where: {
       projectId_userId: { projectId, userId },
     },
+    select: { role: true },
   });
-  if (member) return true;
 
-  const project = await prisma.project.findFirst({
-    where: { id: projectId, userId },
-  });
-  return Boolean(project);
+  return member ? member.role : null;
+}
+
+// Pomocnik weryfikujący ogólny dostęp (odczyt) użytkownika do projektu
+async function userHasProjectAccess(rawProjectId: unknown, userId: number): Promise<boolean> {
+  const role = await getUserProjectRole(rawProjectId, userId);
+  return role !== null;
 }
 
 // GET /api/tasks - lista zadań w projektach, do których użytkownik ma dostęp
@@ -205,17 +219,23 @@ tasksRouter.post(
     } = req.body;
 
     try {
-      // Weryfikacja czy użytkownik jest członkiem lub właścicielem projektu
-      const hasAccess = await userHasProjectAccess(projectId, userId);
-      if (!hasAccess) {
+      // Weryfikacja czy użytkownik jest członkiem lub właścicielem projektu oraz czy ma uprawnienia do zapisu
+      const role = await getUserProjectRole(projectId, userId);
+      if (!role) {
         throw AppError.notFound('Project not found or you are not a member');
       }
+      if (role === 'VIEWER') {
+        throw AppError.forbidden('Viewers cannot create tasks');
+      }
 
-      // Jeśli podano assignedToId, sprawdź czy przypisywany użytkownik również ma dostęp do projektu
+      // Jeśli podano assignedToId, sprawdź czy przypisywany użytkownik również ma dostęp do projektu i nie jest VIEWERem
       if (assignedToId !== undefined && assignedToId !== null) {
-        const assigneeHasAccess = await userHasProjectAccess(projectId, assignedToId);
-        if (!assigneeHasAccess) {
+        const assigneeRole = await getUserProjectRole(projectId, assignedToId);
+        if (!assigneeRole) {
           throw AppError.badRequest('Assigned user is not a member of this project');
+        }
+        if (assigneeRole === 'VIEWER') {
+          throw AppError.badRequest('Cannot assign task to a viewer');
         }
       }
 
@@ -258,6 +278,9 @@ tasksRouter.post(
           dueDate: task.dueDate ? task.dueDate.toISOString() : null,
         });
       }
+
+      // Wysłanie powiadomienia SSE w czasie rzeczywistym
+      sseManager.broadcast('task:created', { task, projectId: task.projectId });
 
       res.status(201).json(task);
     } catch (error) {
@@ -343,21 +366,35 @@ const updateTaskHandler = async (req: any, res: any, next: any) => {
       throw AppError.notFound('Task not found');
     }
 
+    const currentRole = await getUserProjectRole(existingTask.projectId, userId);
+    if (!currentRole) {
+      throw AppError.notFound('Task not found');
+    }
+    if (currentRole === 'VIEWER') {
+      throw AppError.forbidden('Viewers cannot modify tasks');
+    }
+
     const targetProjectId = newProjectId !== undefined ? newProjectId : existingTask.projectId;
 
-    // Jeśli zmieniany jest projekt, sprawdź czy nowy projekt również jest dostępny dla usera
+    // Jeśli zmieniany jest projekt, sprawdź czy nowy projekt również jest dostępny dla usera i czy nie jest VIEWERem
     if (newProjectId !== undefined && newProjectId !== existingTask.projectId) {
-      const targetAccess = await userHasProjectAccess(newProjectId, userId);
-      if (!targetAccess) {
+      const targetRole = await getUserProjectRole(newProjectId, userId);
+      if (!targetRole) {
         throw AppError.notFound('Target project not found or you are not a member');
+      }
+      if (targetRole === 'VIEWER') {
+        throw AppError.forbidden('Viewers cannot move tasks to this project');
       }
     }
 
-    // Jeśli zmieniana lub ustawiana jest osoba przypisana, sprawdź czy należy do projektu docelowego
+    // Jeśli zmieniana lub ustawiana jest osoba przypisana, sprawdź czy należy do projektu docelowego i nie jest VIEWERem
     if (assignedToId !== undefined && assignedToId !== null) {
-      const assigneeAccess = await userHasProjectAccess(targetProjectId, assignedToId);
-      if (!assigneeAccess) {
+      const assigneeRole = await getUserProjectRole(targetProjectId, assignedToId);
+      if (!assigneeRole) {
         throw AppError.badRequest('Assigned user is not a member of this project');
+      }
+      if (assigneeRole === 'VIEWER') {
+        throw AppError.badRequest('Cannot assign task to a viewer');
       }
     }
 
@@ -405,6 +442,13 @@ const updateTaskHandler = async (req: any, res: any, next: any) => {
       });
     }
 
+    // Wysłanie powiadomienia SSE w czasie rzeczywistym
+    sseManager.broadcast('task:updated', {
+      task: updatedTask,
+      projectId: updatedTask.projectId,
+      previousProjectId: existingTask.projectId !== updatedTask.projectId ? existingTask.projectId : undefined,
+    });
+
     res.json(updatedTask);
   } catch (error) {
     next(error);
@@ -451,6 +495,12 @@ tasksRouter.delete(
         throw AppError.notFound('Task not found');
       }
 
+      // Widzowie nie mogą usuwać zadań
+      const role = await getUserProjectRole(existingTask.projectId, userId);
+      if (role === 'VIEWER') {
+        throw AppError.forbidden('Viewers cannot delete tasks');
+      }
+
       // Usunąć może: autor zadania LUB autor/właściciel całego projektu
       const isAuthor = existingTask.userId === userId;
       const isProjectOwner = existingTask.project.userId === userId;
@@ -462,6 +512,9 @@ tasksRouter.delete(
       await prisma.task.delete({
         where: { id: taskId },
       });
+
+      // Wysłanie powiadomienia SSE w czasie rzeczywistym
+      sseManager.broadcast('task:deleted', { taskId, projectId: existingTask.projectId });
 
       res.json({ message: 'Task deleted successfully' });
     } catch (error) {
@@ -533,9 +586,12 @@ tasksRouter.post(
         throw AppError.notFound('Task not found');
       }
 
-      const hasAccess = await userHasProjectAccess(task.projectId, userId);
-      if (!hasAccess) {
+      const role = await getUserProjectRole(task.projectId, userId);
+      if (!role) {
         throw AppError.notFound('Task not found');
+      }
+      if (role === 'VIEWER') {
+        throw AppError.forbidden('Viewers cannot add comments');
       }
 
       const comment = await prisma.taskComment.create({
@@ -578,6 +634,13 @@ tasksRouter.post(
         });
       }
 
+      // Wysłanie powiadomienia SSE w czasie rzeczywistym
+      sseManager.broadcast('comment:created', {
+        comment,
+        taskId,
+        projectId: task.projectId,
+      });
+
       res.status(201).json(comment);
     } catch (error) {
       next(error);
@@ -611,6 +674,12 @@ tasksRouter.delete(
         throw AppError.notFound('Comment not found');
       }
 
+      // Widzowie nie mogą usuwać komentarzy
+      const role = await getUserProjectRole(comment.task.projectId, userId);
+      if (role === 'VIEWER') {
+        throw AppError.forbidden('Viewers cannot delete comments');
+      }
+
       const isCommentAuthor = comment.userId === userId;
       const isProjectOwner = comment.task.project.userId === userId;
 
@@ -620,6 +689,13 @@ tasksRouter.delete(
 
       await prisma.taskComment.delete({
         where: { id: commentId },
+      });
+
+      // Wysłanie powiadomienia SSE w czasie rzeczywistym
+      sseManager.broadcast('comment:deleted', {
+        commentId,
+        taskId,
+        projectId: comment.task.projectId,
       });
 
       res.json({ message: 'Comment deleted successfully' });

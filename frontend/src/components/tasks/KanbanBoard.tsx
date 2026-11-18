@@ -26,7 +26,13 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
   formatDate,
 }) => {
   return (
-    <div className="kanban-board-container">
+    <div
+      className="kanban-board-container"
+      onDragEnd={() => {
+        setDraggedTaskId(null);
+        setDragOverColumn(null);
+      }}
+    >
       {/* Kolumna 1: Do zrobienia */}
       <div
         className={`kanban-column ${dragOverColumn === 'todo' ? 'drag-over' : ''}`}
@@ -39,6 +45,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
         onDrop={(e) => {
           e.preventDefault();
           setDragOverColumn(null);
+          setDraggedTaskId(null);
           const taskIdStr = e.dataTransfer.getData('text/plain');
           if (taskIdStr) onKanbanDrop(Number(taskIdStr), 'todo');
         }}
@@ -112,6 +119,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
         onDrop={(e) => {
           e.preventDefault();
           setDragOverColumn(null);
+          setDraggedTaskId(null);
           const taskIdStr = e.dataTransfer.getData('text/plain');
           if (taskIdStr) onKanbanDrop(Number(taskIdStr), 'in_progress');
         }}
@@ -183,6 +191,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
         onDrop={(e) => {
           e.preventDefault();
           setDragOverColumn(null);
+          setDraggedTaskId(null);
           const taskIdStr = e.dataTransfer.getData('text/plain');
           if (taskIdStr) onKanbanDrop(Number(taskIdStr), 'completed');
         }}

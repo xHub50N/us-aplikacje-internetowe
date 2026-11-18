@@ -1,5 +1,5 @@
 import React from 'react';
-import { Project, ProjectMember, User } from '../../api';
+import { Project, ProjectMember, ProjectRole, User } from '../../api';
 import { X, UserPlus, Trash2 } from 'lucide-react';
 
 interface ProjectMembersModalProps {
@@ -12,6 +12,8 @@ interface ProjectMembersModalProps {
   membersModalError: string;
   newMemberEmail: string;
   setNewMemberEmail: (val: string) => void;
+  newMemberRole: ProjectRole;
+  setNewMemberRole: (role: ProjectRole) => void;
   onAddMember: (e: React.FormEvent) => void;
   onRemoveMember: (projectId: number, userId: number, userName: string) => void;
 }
@@ -26,6 +28,8 @@ export const ProjectMembersModal: React.FC<ProjectMembersModalProps> = ({
   membersModalError,
   newMemberEmail,
   setNewMemberEmail,
+  newMemberRole,
+  setNewMemberRole,
   onAddMember,
   onRemoveMember,
 }) => {
@@ -66,7 +70,17 @@ export const ProjectMembersModal: React.FC<ProjectMembersModalProps> = ({
                   placeholder="adres@example.com"
                   value={newMemberEmail}
                   onChange={(e) => setNewMemberEmail(e.target.value)}
+                  style={{ flex: 1 }}
                 />
+                <select
+                  className="form-input"
+                  value={newMemberRole}
+                  onChange={(e) => setNewMemberRole(e.target.value as ProjectRole)}
+                  style={{ width: 'auto' }}
+                >
+                  <option value="MEMBER">Edytor (MEMBER)</option>
+                  <option value="VIEWER">Widz (VIEWER)</option>
+                </select>
                 <button type="submit" className="btn-primary" style={{ whiteSpace: 'nowrap' }}>
                   <UserPlus size={14} style={{ marginRight: '4px' }} /> Dodaj
                 </button>
@@ -105,7 +119,12 @@ export const ProjectMembersModal: React.FC<ProjectMembersModalProps> = ({
                     {m.userId === currentUser.id && ' (Ty)'}
                   </div>
                   <div style={{ fontSize: '11px', color: '#64748b' }}>
-                    {m.user?.email} • {m.role === 'OWNER' ? '👑 Właściciel' : 'Członek zespołu'}
+                    {m.user?.email} •{' '}
+                    {m.role === 'OWNER'
+                      ? '👑 Właściciel'
+                      : m.role === 'VIEWER'
+                      ? '👁️ Widz (Tylko odczyt)'
+                      : '✏️ Członek zespołu'}
                   </div>
                 </div>
 

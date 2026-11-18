@@ -7,6 +7,7 @@ import { config } from './lib/config.js';
 import { authRouter } from './routes/auth.js';
 import { projectsRouter } from './routes/projects.js';
 import { tasksRouter } from './routes/tasks.js';
+import { eventsRouter } from './routes/events.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { AppError } from './lib/errors.js';
 
@@ -38,6 +39,9 @@ app.use('/api/projects', projectsRouter);
 
 // Trasy zadań
 app.use('/api/tasks', tasksRouter);
+
+// Trasy zdarzeń w czasie rzeczywistym (SSE)
+app.use('/api/events', eventsRouter);
 
 // Sprawdzenie połączenia z PostgreSQL
 app.get('/api/health', async (_req, res, next) => {

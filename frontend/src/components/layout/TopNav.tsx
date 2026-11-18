@@ -10,6 +10,7 @@ interface TopNavProps {
   onSelectAllProjects: () => void;
   searchInputRef: React.RefObject<HTMLInputElement | null>;
   showToast: (message: string, type?: 'success' | 'error' | 'info') => void;
+  isViewer?: boolean;
 }
 
 export const TopNav: React.FC<TopNavProps> = ({
@@ -20,6 +21,7 @@ export const TopNav: React.FC<TopNavProps> = ({
   onSelectAllProjects,
   searchInputRef,
   showToast,
+  isViewer = false,
 }) => {
   return (
     <header className="app-topnav">
@@ -60,15 +62,34 @@ export const TopNav: React.FC<TopNavProps> = ({
           <span className="notification-indicator-dot" />
         </button>
 
-        {/* Główny CTA: Szybkie dodanie zadania */}
-        <button
-          type="button"
-          className="cta-primary-btn"
-          onClick={onQuickTaskOpen}
-        >
-          <Plus size={15} />
-          <span>Szybkie dodanie zadania</span>
-        </button>
+        {/* Główny CTA: Szybkie dodanie zadania lub wskaźnik trybu widza */}
+        {isViewer ? (
+          <div
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '6px 12px',
+              borderRadius: '6px',
+              backgroundColor: 'rgba(51, 65, 85, 0.4)',
+              border: '1px solid #334155',
+              color: '#94a3b8',
+              fontSize: '12px',
+              fontWeight: 500,
+            }}
+          >
+            <span>👁️ Tryb widza (tylko odczyt)</span>
+          </div>
+        ) : (
+          <button
+            type="button"
+            className="cta-primary-btn"
+            onClick={onQuickTaskOpen}
+          >
+            <Plus size={15} />
+            <span>Szybkie dodanie zadania</span>
+          </button>
+        )}
       </div>
     </header>
   );

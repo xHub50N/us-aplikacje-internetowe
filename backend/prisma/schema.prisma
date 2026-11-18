@@ -52,6 +52,7 @@ model RefreshToken {
 enum ProjectRole {
   OWNER
   MEMBER
+  VIEWER
 }
 
 model Project {
