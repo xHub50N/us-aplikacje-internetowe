@@ -140,10 +140,10 @@ tasksRouter.get(
             take: currentLimit,
             include: {
               user: {
-                select: { id: true, name: true, email: true },
+                select: { id: true, name: true, email: true, avatarUrl: true },
               },
               assignedTo: {
-                select: { id: true, name: true, email: true },
+                select: { id: true, name: true, email: true, avatarUrl: true },
               },
               project: {
                 select: {
@@ -177,10 +177,10 @@ tasksRouter.get(
         orderBy: { [sortBy]: sortOrder },
         include: {
           user: {
-            select: { id: true, name: true, email: true },
+            select: { id: true, name: true, email: true, avatarUrl: true },
           },
           assignedTo: {
-            select: { id: true, name: true, email: true },
+            select: { id: true, name: true, email: true, avatarUrl: true },
           },
           project: {
             select: {
@@ -252,10 +252,10 @@ tasksRouter.post(
         },
         include: {
           user: {
-            select: { id: true, name: true, email: true },
+            select: { id: true, name: true, email: true, avatarUrl: true },
           },
           assignedTo: {
-            select: { id: true, name: true, email: true },
+            select: { id: true, name: true, email: true, avatarUrl: true },
           },
           project: {
             select: {
@@ -310,10 +310,10 @@ tasksRouter.get(
         },
         include: {
           user: {
-            select: { id: true, name: true, email: true },
+            select: { id: true, name: true, email: true, avatarUrl: true },
           },
           assignedTo: {
-            select: { id: true, name: true, email: true },
+            select: { id: true, name: true, email: true, avatarUrl: true },
           },
           project: {
             select: {
@@ -411,10 +411,10 @@ const updateTaskHandler = async (req: any, res: any, next: any) => {
       },
       include: {
         user: {
-          select: { id: true, name: true, email: true },
+          select: { id: true, name: true, email: true, avatarUrl: true },
         },
         assignedTo: {
-          select: { id: true, name: true, email: true },
+          select: { id: true, name: true, email: true, avatarUrl: true },
         },
         project: {
           select: {
@@ -551,7 +551,7 @@ tasksRouter.get(
         orderBy: { createdAt: 'asc' },
         include: {
           user: {
-            select: { id: true, name: true, email: true },
+            select: { id: true, name: true, email: true, avatarUrl: true },
           },
         },
       });
@@ -602,7 +602,7 @@ tasksRouter.post(
         },
         include: {
           user: {
-            select: { id: true, name: true, email: true },
+            select: { id: true, name: true, email: true, avatarUrl: true },
           },
         },
       });

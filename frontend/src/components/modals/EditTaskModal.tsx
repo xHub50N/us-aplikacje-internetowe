@@ -1,5 +1,7 @@
 import React from 'react';
 import { Task, Priority, ProjectMember, TaskComment, User, Project } from '../../api';
+import { Avatar } from '../common/Avatar';
+import { SearchableAssigneeSelect } from '../common/SearchableAssigneeSelect';
 import { X, MessageSquare, Trash2, Send } from 'lucide-react';
 
 interface EditTaskModalProps {
@@ -118,18 +120,12 @@ export const EditTaskModal: React.FC<EditTaskModalProps> = ({
 
             <div className="form-field">
               <label>Przypisana osoba</label>
-              <select
-                className="form-select"
+              <SearchableAssigneeSelect
                 value={assignedToId}
-                onChange={(e) => setAssignedToId(e.target.value ? Number(e.target.value) : '')}
-              >
-                <option value="">👤 Nieprzypisane</option>
-                {availableAssignees.map((m) => (
-                  <option key={m.id} value={m.userId}>
-                    {m.user?.name || `Użytkownik #${m.userId}`}
-                  </option>
-                ))}
-              </select>
+                onChange={(val) => setAssignedToId(val !== null ? val : '')}
+                members={availableAssignees}
+                placeholder="Wybierz osobę do przypisania..."
+              />
             </div>
 
             <div className="form-field">
@@ -171,9 +167,7 @@ export const EditTaskModal: React.FC<EditTaskModalProps> = ({
                       <div key={comment.id} className="comment-bubble-item">
                         <div className="comment-top-bar">
                           <div className="comment-user-info">
-                            <div className="comment-mini-avatar">
-                              {(comment.user?.name || comment.user?.email || 'U').substring(0, 2).toUpperCase()}
-                            </div>
+                            <Avatar user={comment.user} size={20} />
                             <span className="comment-user-name">
                               {comment.user?.name || comment.user?.email || 'Użytkownik'} {isMyComment && '(Ty)'}
                             </span>

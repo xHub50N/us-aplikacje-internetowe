@@ -138,6 +138,7 @@ export interface User {
   id: number;
   email: string;
   name: string;
+  avatarUrl?: string | null;
 }
 
 export type ProjectRole = 'OWNER' | 'MEMBER' | 'VIEWER';
@@ -152,6 +153,7 @@ export interface ProjectMember {
     id: number;
     email: string;
     name: string;
+    avatarUrl?: string | null;
   };
 }
 
@@ -190,11 +192,13 @@ export interface Task {
     id: number;
     email: string;
     name: string;
+    avatarUrl?: string | null;
   };
   assignedTo?: {
     id: number;
     email: string;
     name: string;
+    avatarUrl?: string | null;
   } | null;
   project?: {
     id: number;
@@ -215,6 +219,7 @@ export interface TaskComment {
     id: number;
     name: string;
     email: string;
+    avatarUrl?: string | null;
   };
 }
 
@@ -258,6 +263,16 @@ export const api = {
         }
       ),
     me: () => request<{ user: User }>('/auth/me'),
+    updateProfile: (body: { name?: string; avatarUrl?: string | null }) =>
+      request<{ user: User }>('/auth/profile', {
+        method: 'PATCH',
+        body: JSON.stringify(body),
+      }),
+    changePassword: (body: { currentPassword: string; newPassword: string }) =>
+      request<{ message: string }>('/auth/change-password', {
+        method: 'PUT',
+        body: JSON.stringify(body),
+      }),
     forgotPassword: (body: { email: string }) =>
       request<{ message: string }>('/auth/forgot-password', {
         method: 'POST',

@@ -28,6 +28,16 @@ export const logoutSchema = z.object({
   refreshToken: z.string().trim().optional(),
 });
 
+export const updateProfileSchema = z.object({
+  name: z.string().trim().min(1, 'Name cannot be empty').max(100, 'Name must not exceed 100 characters').optional(),
+  avatarUrl: z.string().trim().max(500000, 'Avatar payload is too large').nullable().optional(),
+});
+
+export const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1, 'Current password is required'),
+  newPassword: z.string().min(8, 'New password must be at least 8 characters long').max(128, 'New password must not exceed 128 characters'),
+});
+
 export const numericIdParamSchema = z.object({
   id: z
     .string()

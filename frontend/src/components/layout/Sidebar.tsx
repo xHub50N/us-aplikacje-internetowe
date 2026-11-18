@@ -1,5 +1,6 @@
 import React from 'react';
 import { User, Project } from '../../api';
+import { Avatar } from '../common/Avatar';
 import {
   LayoutDashboard,
   CheckSquare,
@@ -32,6 +33,7 @@ interface SidebarProps {
   onOpenMembersModal: (projectId: number, e: React.MouseEvent) => void;
   onDeleteProject: (proj: Project, e: React.MouseEvent) => void;
   onLogout: () => void;
+  onOpenSettings?: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -50,6 +52,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onOpenMembersModal,
   onDeleteProject,
   onLogout,
+  onOpenSettings,
 }) => {
   return (
     <aside className={`app-sidebar ${sidebarCollapsed ? 'collapsed' : ''}`}>
@@ -162,7 +165,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <button
                 type="button"
                 className={`sidebar-nav-item ${activeNav === 'settings' ? 'active' : ''}`}
-                onClick={() => setActiveNav('settings')}
+                onClick={() => {
+                  setActiveNav('settings');
+                  if (onOpenSettings) onOpenSettings();
+                }}
               >
                 <Settings size={16} className="nav-icon" />
                 {!sidebarCollapsed && <span>Ustawienia</span>}
@@ -275,11 +281,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       {/* Dolna sekcja (Profil Użytkownika) */}
       <div className="sidebar-footer">
-        <div className="user-profile-widget">
+        <div
+          className="user-profile-widget"
+          onClick={onOpenSettings}
+          style={{ cursor: 'pointer' }}
+          title="Kliknij, aby otworzyć ustawienia profilu"
+        >
           <div className="user-avatar-wrap">
-            <div className="user-avatar-circle">
-              {(user?.name || user?.email || 'U').substring(0, 2).toUpperCase()}
-            </div>
+            <Avatar user={user} size={32} />
             <div className="online-dot-badge" title="Status: Online" />
           </div>
           {!sidebarCollapsed && (

@@ -1,6 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Task, Project } from '../../api';
-import { Inbox, Pencil, Trash2, Calendar, User as UserIcon, MessageSquare } from 'lucide-react';
+import { Avatar } from '../common/Avatar';
+import { SearchableAssigneeSelect } from '../common/SearchableAssigneeSelect';
+import { Inbox, Pencil, Trash2, Calendar, MessageSquare, FolderKanban } from 'lucide-react';
 
 interface TaskBacklogTableProps {
   tasks: Task[];
@@ -23,6 +25,8 @@ export const TaskBacklogTable: React.FC<TaskBacklogTableProps> = ({
   isOverdue,
   formatDate,
 }) => {
+  const [openDropdownTaskId, setOpenDropdownTaskId] = useState<number | null>(null);
+
   if (tasks.length === 0) {
     return (
       <div className="backlog-table-card">
@@ -46,6 +50,10 @@ export const TaskBacklogTable: React.FC<TaskBacklogTableProps> = ({
             key={task.id}
             className={`backlog-row ${task.completed ? 'completed-task' : ''}`}
             onClick={() => onOpenEditTask(task)}
+            style={{
+              position: 'relative',
+              zIndex: openDropdownTaskId === task.id ? 40 : 1,
+            }}
           >
             {/* 1. Checkbox */}
             <input
@@ -68,17 +76,23 @@ export const TaskBacklogTable: React.FC<TaskBacklogTableProps> = ({
                   {task.priority === 'MEDIUM' && 'Średni'}
                   {task.priority === 'LOW' && 'Niski'}
                 </span>
-                <span className="task-title-text">{task.title}</span>
+                {taskProj && (
+                  <span className="task-project-badge" title={`Projekt: ${taskProj.name}`}>
+                    <FolderKanban size={11} />
+                    <span className="task-project-name">{taskProj.name}</span>
+                  </span>
+                )}
+                <span className="task-title-text" title={task.title}>{task.title}</span>
               </div>
               {task.description && (
-                <span className="task-desc-preview">{task.description}</span>
+                <span className="task-desc-preview" title={task.description}>
+                  {task.description}
+                </span>
               )}
               <div className="task-meta-bottom">
-                {taskProj && (
-                  <span className="task-project-tag">{taskProj.name}</span>
-                )}
-                <span style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
-                  <UserIcon size={11} /> {task.user?.name || 'Autor'}
+                <span className="task-author-chip">
+                  <Avatar user={task.user} size={15} />
+                  <span>{task.user?.name || 'Autor'}</span>
                 </span>
                 {task._count && task._count.comments > 0 && (
                   <span
@@ -101,22 +115,18 @@ export const TaskBacklogTable: React.FC<TaskBacklogTableProps> = ({
             </div>
 
             {/* 5. Przypisany użytkownik */}
-            <div className="task-assignee-col" onClick={(e) => e.stopPropagation()}>
-              <select
-                className="assignee-inline-select"
+            <div
+              className="task-assignee-col"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <SearchableAssigneeSelect
                 value={task.assignedToId || ''}
-                onChange={(e) => {
-                  const val = e.target.value ? Number(e.target.value) : null;
-                  onAssigneeChange(task, val);
-                }}
-              >
-                <option value="">👤 Nieprzypisane</option>
-                {assigneesList.map((m) => (
-                  <option key={m.id} value={m.userId}>
-                    {m.user?.name || `Użytkownik #${m.userId}`}
-                  </option>
-                ))}
-              </select>
+                onChange={(val) => onAssigneeChange(task, val)}
+                members={assigneesList}
+                placeholder="Nieprzypisane"
+                variant="compact"
+                onOpenChange={(isOpen) => setOpenDropdownTaskId(isOpen ? task.id : null)}
+              />
             </div>
 
             {/* 6. Termin */}

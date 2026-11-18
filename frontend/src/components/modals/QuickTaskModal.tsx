@@ -1,5 +1,6 @@
 import React from 'react';
 import { Project, Priority, ProjectMember } from '../../api';
+import { SearchableAssigneeSelect } from '../common/SearchableAssigneeSelect';
 import { X } from 'lucide-react';
 
 interface QuickTaskModalProps {
@@ -127,18 +128,12 @@ export const QuickTaskModal: React.FC<QuickTaskModalProps> = ({
 
             <div className="form-field">
               <label>Przypisz do osoby</label>
-              <select
-                className="form-select"
+              <SearchableAssigneeSelect
                 value={assignedToId}
-                onChange={(e) => setAssignedToId(e.target.value ? Number(e.target.value) : '')}
-              >
-                <option value="">👤 Nieprzypisane</option>
-                {availableAssignees.map((m) => (
-                  <option key={m.id} value={m.userId}>
-                    {m.user?.name || `Użytkownik #${m.userId}`}
-                  </option>
-                ))}
-              </select>
+                onChange={(val) => setAssignedToId(val !== null ? val : '')}
+                members={availableAssignees}
+                placeholder="Wybierz osobę do przypisania..."
+              />
             </div>
           </div>
           <div className="modal-footer">

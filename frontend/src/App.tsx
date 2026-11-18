@@ -15,6 +15,7 @@ import { QuickTaskModal } from './components/modals/QuickTaskModal';
 import { EditTaskModal } from './components/modals/EditTaskModal';
 import { ProjectModal } from './components/modals/ProjectModal';
 import { ProjectMembersModal } from './components/modals/ProjectMembersModal';
+import { UserSettingsModal } from './components/modals/UserSettingsModal';
 import { createEventSource } from './api';
 
 import { useToast } from './hooks/useToast';
@@ -33,6 +34,7 @@ export function App() {
   >('tasks');
   const [activeView, setActiveView] = useState<'list' | 'kanban' | 'calendar'>('list');
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   // Projects domain hook
@@ -114,6 +116,7 @@ export function App() {
         setEditingProject(null);
         setEditingTask(null);
         setIsMembersModalOpen(false);
+        setIsSettingsModalOpen(false);
         setConfirmDialog(null);
       }
     };
@@ -176,6 +179,7 @@ export function App() {
         onOpenMembersModal={projectsHook.handleOpenMembersModal}
         onDeleteProject={projectsHook.handleDeleteProject}
         onLogout={handleLogout}
+        onOpenSettings={() => setIsSettingsModalOpen(true)}
       />
 
       <div className="app-main">
@@ -376,6 +380,20 @@ export function App() {
         config={confirmDialog}
         onClose={() => setConfirmDialog(null)}
       />
+
+      {user && (
+        <UserSettingsModal
+          isOpen={isSettingsModalOpen}
+          onClose={() => setIsSettingsModalOpen(false)}
+          currentUser={user}
+          onUserUpdated={(updatedUser) => {
+            setUser(updatedUser);
+            loadProjects();
+            loadTasks();
+          }}
+          showToast={showToast}
+        />
+      )}
     </div>
   );
 }

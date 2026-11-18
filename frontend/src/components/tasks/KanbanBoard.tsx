@@ -1,5 +1,6 @@
 import React from 'react';
 import { Task } from '../../api';
+import { Avatar } from '../common/Avatar';
 import { Inbox, Flame, CheckCircle2, MessageSquare } from 'lucide-react';
 
 interface KanbanBoardProps {
@@ -93,7 +94,16 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                 <p className="kanban-card-desc">{task.description}</p>
               )}
               <div className="kanban-card-footer">
-                <span>{task.assignedTo?.name || 'Nieprzypisane'}</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  {task.assignedTo ? (
+                    <>
+                      <Avatar user={task.assignedTo} size={18} />
+                      <span style={{ fontSize: '11px', color: '#cbd5e1' }}>{task.assignedTo.name}</span>
+                    </>
+                  ) : (
+                    <span style={{ fontSize: '11px', color: '#64748b' }}>Nieprzypisane</span>
+                  )}
+                </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   {task._count && task._count.comments > 0 && (
                     <span className="task-comment-count-chip">
@@ -165,7 +175,16 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                 <p className="kanban-card-desc">{task.description}</p>
               )}
               <div className="kanban-card-footer">
-                <span>{task.assignedTo?.name || 'Nieprzypisane'}</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  {task.assignedTo ? (
+                    <>
+                      <Avatar user={task.assignedTo} size={18} />
+                      <span style={{ fontSize: '11px', color: '#cbd5e1' }}>{task.assignedTo.name}</span>
+                    </>
+                  ) : (
+                    <span style={{ fontSize: '11px', color: '#64748b' }}>Nieprzypisane</span>
+                  )}
+                </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   {task._count && task._count.comments > 0 && (
                     <span className="task-comment-count-chip">
@@ -236,7 +255,16 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                 {task.title}
               </h4>
               <div className="kanban-card-footer">
-                <span>{task.assignedTo?.name || 'Nieprzypisane'}</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  {task.assignedTo ? (
+                    <>
+                      <Avatar user={task.assignedTo} size={18} />
+                      <span style={{ fontSize: '11px', color: '#cbd5e1' }}>{task.assignedTo.name}</span>
+                    </>
+                  ) : (
+                    <span style={{ fontSize: '11px', color: '#64748b' }}>Nieprzypisane</span>
+                  )}
+                </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   {task._count && task._count.comments > 0 && (
                     <span className="task-comment-count-chip">

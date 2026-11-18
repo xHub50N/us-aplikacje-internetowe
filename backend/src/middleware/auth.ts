@@ -31,6 +31,7 @@ export async function authenticateToken(
         id: true,
         email: true,
         name: true,
+        avatarUrl: true,
       },
     });
 

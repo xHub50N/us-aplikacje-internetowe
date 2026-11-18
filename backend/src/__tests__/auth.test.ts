@@ -100,6 +100,56 @@ describe('Auth API Integration Tests', () => {
     expect(typeof res.body.token).toBe('string');
   });
 
+  it('PATCH /api/auth/profile - aktualizuje nazwę oraz awatar użytkownika', async () => {
+    const newAvatar = 'https://example.com/avatar.png';
+    const res = await request(app)
+      .patch('/api/auth/profile')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({
+        name: 'Jan Zaktualizowany',
+        avatarUrl: newAvatar,
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.user.name).toBe('Jan Zaktualizowany');
+    expect(res.body.user.avatarUrl).toBe(newAvatar);
+  });
+
+  it('PUT /api/auth/change-password - odrzuca zmianę hasła przy błędnym obecnym haśle (401)', async () => {
+    const res = await request(app)
+      .put('/api/auth/change-password')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({
+        currentPassword: 'WrongPassword!',
+        newPassword: 'BrandNewPassword123!',
+      });
+
+    expect(res.status).toBe(401);
+  });
+
+  it('PUT /api/auth/change-password - pomyślnie zmienia hasło użytkownika', async () => {
+    const res = await request(app)
+      .put('/api/auth/change-password')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({
+        currentPassword: testPassword,
+        newPassword: 'BrandNewPassword123!',
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.message).toBe('Password changed successfully');
+
+    // Weryfikacja logowania nowym hasłem
+    const loginRes = await request(app)
+      .post('/api/auth/login')
+      .send({
+        email: testEmail,
+        password: 'BrandNewPassword123!',
+      });
+
+    expect(loginRes.status).toBe(200);
+  });
+
   it('POST /api/auth/logout - unieważnia refreshToken', async () => {
     const res = await request(app)
       .post('/api/auth/logout')

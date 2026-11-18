@@ -21,6 +21,8 @@ import {
   logoutSchema,
   forgotPasswordSchema,
   resetPasswordSchema,
+  updateProfileSchema,
+  changePasswordSchema,
 } from '../schemas/index.js';
 
 export const authRouter = Router();
@@ -68,6 +70,7 @@ authRouter.post(
           id: true,
           email: true,
           name: true,
+          avatarUrl: true,
           createdAt: true,
         },
       });
@@ -116,6 +119,7 @@ authRouter.post(
           id: user.id,
           email: user.email,
           name: user.name,
+          avatarUrl: user.avatarUrl,
           createdAt: user.createdAt,
         },
         token,
@@ -145,6 +149,7 @@ authRouter.post(
           id: true,
           email: true,
           name: true,
+          avatarUrl: true,
           createdAt: true,
         },
       });
@@ -170,6 +175,76 @@ authRouter.post(
 authRouter.get('/me', authenticateToken, (req, res) => {
   res.json({ user: req.user });
 });
+
+// PATCH /api/auth/profile - aktualizacja profilu (nazwa, awatar)
+authRouter.patch(
+  '/profile',
+  authenticateToken,
+  validate({ body: updateProfileSchema }),
+  async (req, res, next) => {
+    const userId = req.user!.id;
+    const { name, avatarUrl } = req.body;
+
+    try {
+      const updatedUser = await prisma.user.update({
+        where: { id: userId },
+        data: {
+          ...(name !== undefined ? { name } : {}),
+          ...(avatarUrl !== undefined ? { avatarUrl } : {}),
+        },
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          avatarUrl: true,
+          createdAt: true,
+        },
+      });
+
+      res.json({ user: updatedUser });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// PUT /api/auth/change-password - zmiana hasła zalogowanego użytkownika
+authRouter.put(
+  '/change-password',
+  authenticateToken,
+  validate({ body: changePasswordSchema }),
+  async (req, res, next) => {
+    const userId = req.user!.id;
+    const { currentPassword, newPassword } = req.body;
+
+    try {
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { passwordHash: true },
+      });
+
+      if (!user) {
+        throw AppError.notFound('User not found');
+      }
+
+      const isMatch = await bcrypt.compare(currentPassword, user.passwordHash);
+      if (!isMatch) {
+        throw AppError.unauthorized('Current password is incorrect');
+      }
+
+      const passwordHash = await bcrypt.hash(newPassword, BCRYPT_SALT_ROUNDS);
+
+      await prisma.user.update({
+        where: { id: userId },
+        data: { passwordHash },
+      });
+
+      res.json({ message: 'Password changed successfully' });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
 
 // POST /api/auth/logout - unieważnienie refresh tokenu
 authRouter.post(

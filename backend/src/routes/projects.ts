@@ -49,12 +49,12 @@ projectsRouter.get('/', async (req, res, next) => {
       orderBy: { createdAt: 'desc' },
       include: {
         user: {
-          select: { id: true, name: true, email: true },
+          select: { id: true, name: true, email: true, avatarUrl: true },
         },
         members: {
           include: {
             user: {
-              select: { id: true, name: true, email: true },
+              select: { id: true, name: true, email: true, avatarUrl: true },
             },
           },
         },
@@ -95,7 +95,7 @@ projectsRouter.post(
           members: {
             include: {
               user: {
-                select: { id: true, name: true, email: true },
+                select: { id: true, name: true, email: true, avatarUrl: true },
               },
             },
           },
@@ -127,12 +127,12 @@ projectsRouter.get(
         where: { id: projectId },
         include: {
           user: {
-            select: { id: true, name: true, email: true },
+            select: { id: true, name: true, email: true, avatarUrl: true },
           },
           members: {
             include: {
               user: {
-                select: { id: true, name: true, email: true },
+                select: { id: true, name: true, email: true, avatarUrl: true },
               },
             },
             orderBy: { createdAt: 'asc' },
@@ -175,7 +175,7 @@ const updateProjectHandler = async (req: any, res: any, next: any) => {
       include: {
         members: {
           include: {
-            user: { select: { id: true, name: true, email: true } },
+            user: { select: { id: true, name: true, email: true, avatarUrl: true } },
           },
         },
       },
@@ -252,7 +252,7 @@ projectsRouter.get(
         where: { projectId },
         include: {
           user: {
-            select: { id: true, name: true, email: true },
+            select: { id: true, name: true, email: true, avatarUrl: true },
           },
         },
         orderBy: { createdAt: 'asc' },
@@ -312,7 +312,7 @@ projectsRouter.post(
         },
         include: {
           user: {
-            select: { id: true, name: true, email: true },
+            select: { id: true, name: true, email: true, avatarUrl: true },
           },
         },
       });
